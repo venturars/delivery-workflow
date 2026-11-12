@@ -1,20 +1,20 @@
 ---
-name: create-issue
+name: manage-issue
 description: "Crea la issue en GitHub con la plantilla de su tipo, la etiqueta del tipo y asignada a la cuenta del token. Úsala para dejar la tarea escrita."
 ---
 
-### Herramienta: CREATE_ISSUE
+### Herramienta: MANAGE_ISSUE
 
-- **Descripción**: Úsala única y exclusivamente para dejar la tarea escrita en GitHub. No la uses para abrir la rama ni la pull request.
-- **GitHub**: `bash "<carpeta de esta skill>/scripts/gh.sh" ARGUMENTOS`, desde la raíz del repositorio git. Lanza `gh` con el `GITHUB_TOKEN` del `.env` del proyecto. No llames a `gh` directamente: usaría otra cuenta.
+- **Descripción**: Úsala para dejar la tarea escrita en GitHub. La rama y la pull request las abren `manage-branch` y `manage-pr`.
+- **GitHub**: `bash "<carpeta de esta skill>/scripts/gh.sh" ARGUMENTOS`, desde la raíz del repositorio git. Lanza `gh` con el `GITHUB_TOKEN` del `.env` del proyecto. Usa siempre este script: así la issue queda a nombre de la cuenta del token.
 - **Etiqueta**: `bash "<carpeta de esta skill>/scripts/ensure-label.sh" "[TIPO]"`, desde la raíz del repositorio git, antes de crear la issue.
 - **Issue**: `bash "<carpeta de esta skill>/scripts/gh.sh" issue create --title "[TITULO]" --body-file "[FICHERO]" --assignee @me --label "[TIPO]"`. Sin etiqueta, quita `--label`. Escribe antes el cuerpo en un fichero temporal.
 
-La carpeta de esta skill es la que contiene este `SKILL.md`: en Claude Code, `${CLAUDE_SKILL_DIR}`; en Cursor y Codex, `.agents/skills/create-issue`.
+La carpeta de esta skill es la que contiene este `SKILL.md`: en Claude Code, `${CLAUDE_SKILL_DIR}`; en Cursor y Codex, `.agents/skills/manage-issue`.
 
 #### Especificación de Argumentos
 
-1. **Tipo** _(Obligatorio)_: `feat`, `fix`, `docs`, `refactor`, `test`, `chore` o `knowledge`. Ningún otro.
+1. **Tipo** _(Obligatorio)_: `feat`, `fix`, `docs`, `refactor`, `test`, `chore` o `knowledge`. Solo estos siete.
 2. **Título** _(Obligatorio)_: El título. La forma está en la plantilla del tipo.
 3. **Cuerpo** _(Obligatorio)_: Español. Rellena la plantilla del tipo, `<carpeta de esta skill>/assets/<tipo>_issue.md`, con «Qué hay que hacer» y «Cómo probarlo». Si el tipo no tiene plantilla, usa la más cercana. Si la persona nombró revisores, añade al final una línea `Revisan: nombre, nombre`.
 4. **Persona asignada** _(Obligatorio)_: `@me`, la cuenta del token.
@@ -22,6 +22,6 @@ La carpeta de esta skill es la que contiene este `SKILL.md`: en Claude Code, `${
 
 #### Reglas de Invocación Críticas
 
-- **Etiqueta**: Si `ensure-label.sh` sale con 0, la issue lleva la etiqueta del tipo. Si sale con 2, la cuenta no puede crearla: crea la issue sin etiqueta y dilo. Si sale con 1, el tipo no vale: no crees la issue. Si sale con 3, falta el token del `.env`: comunica el error y no crees la issue.
-- **Sin spec**: No escribas `## Spec`, `## Plan` ni `## Tasks`. Esas secciones las añade `concept-developer` debajo de la plantilla.
+- **Etiqueta**: Si `ensure-label.sh` sale con 0, la issue lleva la etiqueta del tipo. Si sale con 2, la cuenta no puede crearla: crea la issue sin etiqueta y dilo. Si sale con 1, el tipo no vale: devuelve el error para que el orquestador pregunte el tipo correcto. Si sale con 3, falta el token del `.env`: comunica el error y para.
+- **Sin spec**: Deja el cuerpo con la plantilla del tipo. `concept-developer` añade debajo `## Spec`, `## Plan` y `## Tasks`.
 - **Procesamiento de respuestas**: `gh` escribe la URL de la issue: el número es su última parte. Quédate con el número, el título, la URL y la etiqueta. Si `gh` devuelve un error, comunícalo y no inventes el número.

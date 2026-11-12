@@ -39,7 +39,7 @@ detect_base() {
 }
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
-  echo "Uso: create-branch.sh NUMERO TIPO DESCRIPCION [BASE]" >&2
+  echo "Uso: manage-branch.sh NUMERO TIPO DESCRIPCION [BASE]" >&2
   exit 1
 fi
 

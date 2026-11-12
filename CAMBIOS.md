@@ -7,6 +7,14 @@ El paquete sale de dos piezas de la rama `staging` del repositorio de origen, [v
 
 Estos cambios las juntan en un paquete APM que se instala en cualquier proyecto, con Claude Code, Cursor o Codex. Lo que no aparece aquí está igual que en `staging`.
 
+## Versión 0.2.0: agentes y skills de gestión
+
+- **`create-*` pasa a `manage-*`.** Los agentes `manage-issue`, `manage-branch`, `manage-commit` y `manage-pr`, y las skills `manage-issue`, `manage-branch`, `manage-pr-base`, `manage-draft` y `manage-empty-commit`, con sus scripts. Ya no solo crean: administran la función completa.
+- **Entrevistas con nombre en inglés.** `entrevista-con-repo` pasa a `interview-with-repo` y `entrevista-libre` a `interview-free`. El texto sigue en español.
+- **Skills nuevas.** `edit-pull-request` y `ready-pull-request` para `manage-pr`, y `close-issue` para `manage-issue`. Cada una lleva un `gh.sh` idéntico al de las demás.
+- **Reglas en forma de guía.** Las prohibiciones de los agentes y las skills se reescriben como indicaciones con su motivo. Las reglas de seguridad se mantienen: el token sale del `.env`, se usa `gh.sh`, no hay force push, no se copian valores de secretos y no se usa `git add -A`.
+- **Compatibilidad.** Quien tenga instalada la 0.1.1 debe reinstalar el paquete. Las issues abiertas antes de este cambio tienen `Agente: create-commit` o `Agente: create-pr` en sus tasks, y el orquestador busca las tasks por esos nombres: esas issues hay que actualizarlas antes de usar el ciclo.
+
 ## Estructura
 
 | En `staging` | Ahora | Por qué |

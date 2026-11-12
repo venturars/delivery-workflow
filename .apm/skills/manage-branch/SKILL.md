@@ -1,14 +1,14 @@
 ---
-name: create-branch
-description: "Crea la rama de trabajo número-tipo-descripcion desde la rama base detectada o desde otra base. Úsala al empezar, no para commits ni pull requests."
+name: manage-branch
+description: "Crea la rama de trabajo número-tipo-descripcion desde la rama base detectada o desde otra base. Úsala al empezar; para commits usa manage-commit y para la pull request, manage-pr."
 ---
 
-### Herramienta: CREATE_BRANCH
+### Herramienta: MANAGE_BRANCH
 
-- **Descripción**: Úsala cuando hay que abrir la rama `número-tipo-descripcion`. Sin base, sale de la rama base detectada. No la uses para guardar un commit ni para abrir la pull request.
-- **Comando de Terminal**: `bash "<carpeta de esta skill>/scripts/create-branch.sh" "[NUMERO]" "[TIPO]" "[DESCRIPCION]" "[BASE]"`
+- **Descripción**: Úsala cuando hay que abrir la rama `número-tipo-descripcion`. Sin base, sale de la rama base detectada. Para guardar un commit o abrir la pull request, usa `manage-commit` y `manage-pr`.
+- **Comando de Terminal**: `bash "<carpeta de esta skill>/scripts/manage-branch.sh" "[NUMERO]" "[TIPO]" "[DESCRIPCION]" "[BASE]"`
 
-El comando se lanza desde la raíz del repositorio git. La carpeta de esta skill es la que contiene este `SKILL.md`: en Claude Code, `${CLAUDE_SKILL_DIR}`; en Cursor y Codex, `.agents/skills/create-branch`.
+El comando se lanza desde la raíz del repositorio git. La carpeta de esta skill es la que contiene este `SKILL.md`: en Claude Code, `${CLAUDE_SKILL_DIR}`; en Cursor y Codex, `.agents/skills/manage-branch`.
 
 #### Especificación de Argumentos
 

@@ -6,7 +6,7 @@
 ## Qué hay que hacer
 
 <!--
-  El mantenimiento. No es una funcionalidad ni el arreglo de un fallo.
+  El mantenimiento: ni una funcionalidad ni el arreglo de un fallo.
 -->
 
 ## Qué sigue igual

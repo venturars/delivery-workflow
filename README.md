@@ -21,7 +21,7 @@ Solo se para si a la spec le falta un dato, si aparece un secreto o si falla la 
 
 ## El token de GitHub
 
-Todo lo que el paquete hace en GitHub (issues, pull requests, etiquetas, revisiones) lo hace con el token del `.env`, nunca con la sesión de `gh` ni con variables de tu terminal. Por eso no hace falta abrir tu herramienta desde la terminal: basta con que encuentre `gh` y `node`, y `/check-status` lo comprueba.
+Todo lo que el paquete hace en GitHub (issues, pull requests, etiquetas, revisiones) lo hace con el token del `.env`, no con la sesión de `gh` ni con variables de tu terminal. Por eso no hace falta abrir tu herramienta desde la terminal: basta con que encuentre `gh` y `node`, y `/check-status` lo comprueba.
 
 1. Crea un token **clásico** con el permiso `repo` en <https://github.com/settings/tokens/new?scopes=repo>. Que sea de tu cuenta: todo lo que haga el flujo aparecerá a tu nombre. Los tokens *fine-grained* no sirven en repositorios personales de otra persona.
 2. En la raíz del proyecto, crea o abre el fichero `.env` con tu editor y añade esta línea, con tu token:
@@ -32,7 +32,7 @@ Todo lo que el paquete hace en GitHub (issues, pull requests, etiquetas, revisio
 
 3. Comprueba que `.env` está en `.gitignore`. Si no, añádelo: `echo .env >> .gitignore`.
 
-Cada persona tiene su propio `.env` con su propio token. El `.env` no se sube nunca. El push sigue usando tus credenciales de git.
+Cada persona tiene su propio `.env` con su propio token. El `.env` se queda en tu equipo: no lo subas al repositorio. El push sigue usando tus credenciales de git.
 
 ## Instalación en macOS y Linux
 

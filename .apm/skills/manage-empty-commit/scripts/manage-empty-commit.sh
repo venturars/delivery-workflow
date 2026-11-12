@@ -40,7 +40,7 @@ detect_base() {
 }
 
 if [[ $# -ne 1 ]]; then
-  echo "Uso: create-empty-commit.sh NUMERO" >&2
+  echo "Uso: manage-empty-commit.sh NUMERO" >&2
   exit 1
 fi
 

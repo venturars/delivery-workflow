@@ -41,7 +41,7 @@ detect_base() {
 }
 
 if [[ $# -lt 4 || $# -gt 5 || -z "$1" || -z "$2" || -z "$3" || -z "$4" ]]; then
-  echo "Uso: create-pr-base.sh RAMA TITULO CUERPO TIPO [BASE]" >&2
+  echo "Uso: manage-pr-base.sh RAMA TITULO CUERPO TIPO [BASE]" >&2
   exit 1
 fi
 
