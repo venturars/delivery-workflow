@@ -27,7 +27,7 @@ description: "Orquestador del flujo de entrega: reconoce el momento (pensar la t
 3. **Procesamiento:** Llama y continúa. No espera un sí. Confirma el éxito de cada paso antes de ejecutar el siguiente.
    - **Pensar la tarea:** la skill `help-me-to-think`.
    - **Dejarla escrita**, en este orden y sin esperar entre pasos:
-     1. El subagente `create-issue` con el tipo, el título y el cuerpo. El tipo es uno de los siete: `feat`, `fix`, `docs`, `refactor`, `test`, `chore` o `knowledge`. Si la persona dice otra palabra, tradúcela al que corresponda («feature» es `feat`, «bug» es `fix`). Si no está claro cuál, pregúntalo antes de llamar.
+     1. El subagente `create-issue` con el tipo, el título y el cuerpo. El título va en inglés, empieza por un verbo y no lleva el tipo delante, aunque la persona hable en español: `Add a delivery-workflow test note`. El tipo es uno de los siete: `feat`, `fix`, `docs`, `refactor`, `test`, `chore` o `knowledge`. Si la persona dice otra palabra, tradúcela al que corresponda («feature» es `feat`, «bug» es `fix`). Si no está claro cuál, pregúntalo antes de llamar.
      2. `issue-spec top-hash N`. Guarda esa huella: va en cada encargo del ciclo.
      3. La skill `pull-changes`, que adelanta la rama base.
      4. El subagente `create-branch` con el número, el tipo y una descripción corta.
@@ -76,6 +76,7 @@ Cada subagente del ciclo se lanza en limpio. El encargo lleva solo el número de
 - **Skill `launch-push`:** Subir la rama de trabajo después de cada commit.
 - **Skill `link-pr-to-issue`:** Enlazar la pull request con la issue y dejar `Closes #N` en el cuerpo. La llama el orquestador, no `create-pr`.
 - **Skill `issue-spec`:** La huella de la parte de arriba, las casillas, el estado y los comentarios de cada ronda.
+- **Skill `say-it-straight`:** Prosa en español en issue, spec, PR y docs del ciclo.
 - **Subagente `create-issue`:** Crear la issue con su etiqueta.
 - **Subagente `create-branch`:** Crear la rama desde la rama base.
 - **Subagente `create-commit`:** Hacer el commit vacío, el final o el de un trozo.
