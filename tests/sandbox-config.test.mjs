@@ -67,8 +67,16 @@ function checkCodex(base) {
   assert.equal(eurLexBlock(text), eurLexBlock(stagingCodexText()), "el bloque eur-lex difiere de staging");
 }
 
+// La rama local staging y, si no existe (como en el CI), origin/staging.
+function stagingRef() {
+  const ref = ["refs/heads/staging", "refs/remotes/origin/staging"]
+    .find((r) => spawnSync("git", ["rev-parse", "--verify", "--quiet", `${r}^{commit}`], { cwd: root }).status === 0);
+  assert.ok(ref, "no hay ref base para comparar: no existe la rama local staging ni origin/staging (tráela con `git fetch origin staging`)");
+  return ref;
+}
+
 function stagingCodexText() {
-  return execFileSync("git", ["show", `staging:${CODEX}`], { cwd: root, encoding: "utf8" });
+  return execFileSync("git", ["show", `${stagingRef()}:${CODEX}`], { cwd: root, encoding: "utf8" });
 }
 
 function parseStaging() {
@@ -102,7 +110,7 @@ test("cursor networkPolicy", () => {
 });
 
 test("mcp y bloque eur-lex iguales que staging", { skip: tomlSkip }, () => {
-  const diff = spawnSync("git", ["diff", "--exit-code", "staging", "--", ...MCP_FILES], { cwd: root, encoding: "utf8" });
+  const diff = spawnSync("git", ["diff", "--exit-code", stagingRef(), "--", ...MCP_FILES], { cwd: root, encoding: "utf8" });
   assert.equal(diff.status, 0, `hay diferencias con staging:\n${diff.stdout}${diff.stderr}`);
   assert.equal(eurLexBlock(readFileSync(join(root, CODEX), "utf8")), eurLexBlock(stagingCodexText()));
   assert.deepEqual(parseToml(root).mcp_servers["eur-lex"], parseStaging().mcp_servers["eur-lex"]);
@@ -123,7 +131,7 @@ test("apm install conserva claves", { skip: !hasApm ? "apm no está instalado" :
     // Los despliegues locales de skills y agentes chocan con apm install: se
     // dejan solo los ficheros de configuración que la prueba comprueba.
     execFileSync("sh", ["-c",
-      `cd "${work}" && rm -rf .agents .apm-local && for d in .claude .cursor .codex; do find "$d" -mindepth 1 -maxdepth 1 ! -name settings.json ! -name sandbox.json ! -name mcp.json ! -name config.toml -exec rm -rf {} +; done`]);
+      `cd "${work}" && rm -rf .agents .apm-local .opencode && for d in .claude .cursor .codex; do find "$d" -mindepth 1 -maxdepth 1 ! -name settings.json ! -name sandbox.json ! -name mcp.json ! -name config.toml -exec rm -rf {} +; done`]);
     // Como en tests/apm-audit.test.sh: sin dependencias externas.
     execFileSync("ruby", ["-ryaml", "-e",
       'p = ARGV[0]; m = YAML.load_file(p); m.delete("dependencies"); File.write(p, YAML.dump(m))',
