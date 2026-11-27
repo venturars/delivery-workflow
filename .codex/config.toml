@@ -1,0 +1,14 @@
+default_permissions = "github-net"
+
+[features]
+network_proxy = true
+
+[permissions.github-net]
+extends = ":workspace"
+
+[permissions.github-net.network]
+enabled = true
+
+[permissions.github-net.network.domains]
+"api.github.com" = "allow"
+"github.com" = "allow"

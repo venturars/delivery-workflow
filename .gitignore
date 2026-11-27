@@ -5,13 +5,13 @@
 apm_modules/
 apm.lock.yaml
 .agents/
-.codex/
+.codex/*
+!.codex/config.toml
 .opencode/
 .claude/agents/
 .claude/skills/
 .cursor/agents/
 .cursor/mcp.json
-.mcp.json
 
 .DS_Store
 __pycache__/

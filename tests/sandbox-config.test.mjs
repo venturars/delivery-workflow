@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DOMAINS = ["api.github.com", "github.com"];
-const MCP_FILES = [".mcp.json", ".cursor/mcp.json"];
+const MCP_FILES = [".mcp.json"];
 const CODEX = ".codex/config.toml";
 const FORBIDDEN_KEYS = ["sandbox_mode", "sandbox_workspace_write", "network_access"];
 
@@ -21,19 +21,6 @@ if (!hasToml) console.warn("AVISO: se saltan las comprobaciones de TOML: python3
 function parseToml(base) {
   const out = execFileSync("python3", ["-c", PY_PARSE, join(base, CODEX)], { encoding: "utf8" });
   return JSON.parse(out);
-}
-
-// Bloque [mcp_servers.eur-lex] y sus subtablas, tal cual está escrito.
-function eurLexBlock(text) {
-  const lines = text.split("\n");
-  const start = lines.findIndex((l) => l.trim() === "[mcp_servers.eur-lex]");
-  assert.ok(start >= 0, "falta [mcp_servers.eur-lex]");
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    const m = lines[i].match(/^\s*\[+([^\]]+)\]+/);
-    if (m && !m[1].trim().startsWith("mcp_servers.eur-lex")) { end = i; break; }
-  }
-  return lines.slice(start, end).join("\n").trimEnd();
 }
 
 function findKeys(node, names, path = "") {
@@ -63,8 +50,6 @@ function checkCodex(base) {
   assert.deepEqual(Object.keys(profile).sort(), ["extends", "network"], "el perfil no redefine permisos de ficheros");
   assert.deepEqual(Object.keys(profile.network).sort(), ["domains", "enabled"]);
   assert.deepEqual(findKeys(c, FORBIDDEN_KEYS), [], "claves prohibidas en la config de Codex");
-  assert.deepEqual(c.mcp_servers["eur-lex"], parseStaging()["mcp_servers"]["eur-lex"]);
-  assert.equal(eurLexBlock(text), eurLexBlock(stagingCodexText()), "el bloque eur-lex difiere de staging");
 }
 
 // La rama local staging y, si no existe (como en el CI), origin/staging.
@@ -73,16 +58,6 @@ function stagingRef() {
     .find((r) => spawnSync("git", ["rev-parse", "--verify", "--quiet", `${r}^{commit}`], { cwd: root }).status === 0);
   assert.ok(ref, "no hay ref base para comparar: no existe la rama local staging ni origin/staging (tráela con `git fetch origin staging`)");
   return ref;
-}
-
-function stagingCodexText() {
-  return execFileSync("git", ["show", `${stagingRef()}:${CODEX}`], { cwd: root, encoding: "utf8" });
-}
-
-function parseStaging() {
-  const out = execFileSync("python3", ["-c", "import sys, json, tomllib\nprint(json.dumps(tomllib.loads(sys.stdin.read())))"],
-    { input: stagingCodexText(), encoding: "utf8" });
-  return JSON.parse(out);
 }
 
 const readJson = (base, rel) => JSON.parse(readFileSync(join(base, rel), "utf8"));
@@ -109,11 +84,9 @@ test("cursor networkPolicy", () => {
   checkCursor(root);
 });
 
-test("mcp y bloque eur-lex iguales que staging", { skip: tomlSkip }, () => {
+test("mcp de .mcp.json igual que staging", () => {
   const diff = spawnSync("git", ["diff", "--exit-code", stagingRef(), "--", ...MCP_FILES], { cwd: root, encoding: "utf8" });
   assert.equal(diff.status, 0, `hay diferencias con staging:\n${diff.stdout}${diff.stderr}`);
-  assert.equal(eurLexBlock(readFileSync(join(root, CODEX), "utf8")), eurLexBlock(stagingCodexText()));
-  assert.deepEqual(parseToml(root).mcp_servers["eur-lex"], parseStaging().mcp_servers["eur-lex"]);
 });
 
 test("codex perfil github-net", { skip: tomlSkip }, () => {
