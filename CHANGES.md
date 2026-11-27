@@ -42,6 +42,7 @@ Estos cambios las juntan en un paquete APM que se instala en cualquier proyecto 
 ## Plantilla de git
 
 - **Rama base detectada.** Donde ponía `staging`, ahora se usa la rama base: `GIT_WORKFLOW_BASE`, si no `staging` si existe en `origin`, y si no la rama por defecto del remoto. En el repositorio de origen sigue siendo `staging`. Afecta a `pull-changes`, `create-branch`, `create-pr-base` y al orquestador.
+- **Reglas de equipo y cierre de la issue.** El README dice las reglas de trabajo en equipo. El README y `close-issue` dicen que `Closes #N` cierra la issue al fusionar en la rama por defecto.
 - **`create-branch.sh`.** Los argumentos pasan de `BASE NUMERO TIPO DESCRIPCION` a `NUMERO TIPO DESCRIPCION [BASE]`. La rama nueva no sigue a la rama base remota (`--no-track`).
 - **Se mantiene la comprobación del tipo.** `staging` la quitó de los scripts de rama. Aquí se mantiene con los siete tipos, `knowledge` incluido, porque la etiqueta se crea con el nombre del tipo: un tipo mal escrito dejaría una etiqueta suelta en el repositorio. `create-issue` también rechaza un tipo que no sea uno de los siete.
 - **Etiquetas por tipo.** Nuevo. `create-issue` y `create-pr-base` ponen a la issue y a la pull request una etiqueta con el nombre exacto del tipo, y la crean con `ensure-label.sh` si no existe. Si la cuenta no puede crear etiquetas, siguen sin ella y lo dicen.

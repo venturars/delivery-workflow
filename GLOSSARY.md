@@ -116,6 +116,10 @@ _Evitar_: cambio, parte, chunk
 La rama de la que salen las ramas de trabajo y contra la que se abren las pull requests.
 _Evitar_: staging (cuando se habla en general), rama principal
 
+**Rama por defecto**:
+La rama que el repositorio tiene como predeterminada en el forge. Fusionar en ella una pull request con `Closes #N` cierra la issue. Puede ser la rama base u otra.
+_Evitar_: rama principal
+
 **Rama de trabajo**:
 La rama `número-tipo-descripcion` de una issue.
 _Evitar_: feature branch

@@ -103,7 +103,15 @@ Llama al orquestador con `/delivery-workflow` (en opencode 2.x, pide «usa la sk
 
 **Rama base:** `GIT_WORKFLOW_BASE` si está definida, si no `staging` si existe, y si no la rama por defecto.
 
+**Cierre de la issue:** la pull request lleva `Closes #N`, y la issue se cierra cuando se fusiona en la rama por defecto del repositorio. Si la rama base es otra, como `staging` con `main` por defecto, fusionar en ella deja la issue abierta. La cierra una pull request hacia la rama por defecto que lleve esa línea, o una persona a mano.
+
 La prosa de issues, spec, pull requests y documentación del ciclo sigue la skill `say-it-straight` (español declarativo); los commits siguen en inglés con `commit-changes`.
+
+### Trabajo en equipo
+
+- **Una persona por issue.** Una sola persona lleva cada issue de principio a fin. Dos personas no trabajan juntas en la misma.
+- **Identidad personal.** Cada persona usa su propio token en su [`.env`](#el-fichero-env). En el forge, el flujo actúa con esa cuenta, no con una de servicio ni con un bot.
+- **Resultados según la herramienta.** La misma tarea puede dar resultados distintos en Claude Code, Cursor, Codex y opencode. Es lo esperado.
 
 ### Permisos
 

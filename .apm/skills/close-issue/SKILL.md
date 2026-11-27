@@ -1,11 +1,11 @@
 ---
 name: close-issue
-description: "Cierra o reabre una issue a petición de la persona. La usa manage-issue; al terminar una tarea, el merge con Closes #N ya cierra la issue sola."
+description: "Cierra o reabre una issue a petición de la persona. La usa manage-issue; al terminar una tarea, el merge con Closes #N en la rama por defecto ya cierra la issue sola."
 ---
 
 ### Herramienta: CLOSE_ISSUE
 
-- **Descripción**: Cierra o reabre una issue cuando la persona lo pide. Al terminar una tarea no hace falta usarla: el merge con `Closes #N` cierra la issue sola.
+- **Descripción**: Cierra o reabre una issue cuando la persona lo pide. Al terminar una tarea no hace falta usarla si la pull request con `Closes #N` se fusiona en la rama por defecto del repositorio: la issue se cierra sola. Fusionar en otra rama, como `staging` cuando la rama por defecto es `main`, la deja abierta.
 - **Forge**: Antes de llamar, `node "<carpeta de esta skill>/scripts/gitlab.mjs" forge` escribe `github` o `gitlab`. Con `github`, usa los comandos de esta skill con `gh.sh`. Con `gitlab`, los de «En GitLab».
 - **GitHub**: `bash "<carpeta de esta skill>/scripts/gh.sh" ARGUMENTOS`, desde la raíz del repositorio git. Lanza `gh` con el `GITHUB_TOKEN` del `.env` del proyecto. Usa siempre este script: así la acción queda a nombre de la cuenta del token.
 - **Estado**: `bash "<carpeta de esta skill>/scripts/gh.sh" issue view N --json state --jq .state`.
