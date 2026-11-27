@@ -12,7 +12,7 @@ _Evitar_: paso, fase, etapa
 Momento en que una entrevista afila la idea hasta que se puede dejar escrita.
 
 **Dejarla escrita**:
-Momento en que la tarea queda como issue. Arranca todo lo demás sin esperar: la rama, la pull request en draft y el ciclo.
+Momento en que la tarea queda como issue. Arranca todo lo demás sin esperar: la rama, la pull request en draft y el ciclo. En modo unipersonal no hay rama nueva y la pull request no queda en draft.
 
 **Guardar un trozo**:
 Momento en que una parte del trabajo queda en un commit y en el remoto, a petición de la persona.
@@ -33,7 +33,19 @@ La cuenta cuyo texto `issue-spec` entrega a los agentes desde la revisión. Cuá
 Momento en que la persona confirma que el ciclo vuelve a empezar después de que falle la novena ronda o su cierre.
 
 **Solo git**:
-La forma de dejar la tarea escrita que para con la pull request en draft enlazada, sin ciclo, para trabajar a mano.
+La forma de dejar la tarea escrita que para con la pull request enlazada, sin ciclo, para trabajar a mano. La pull request queda en draft, salvo en modo unipersonal.
+
+## Modos
+
+**Modo**:
+La forma de trabajo de todo el proyecto, que `check-status` lee de `.delivery-workflow.yml`: equipo o unipersonal.
+
+**Modo equipo**:
+El modo por defecto. Cada tarea tiene su rama de trabajo y su pull request, en draft hasta que sale a revisión.
+
+**Modo unipersonal**:
+Una persona sola trabaja en `staging`, una tarea cada vez, y lleva cada una a la rama por defecto con una pull request que fusiona ella.
+_Evitar_: modo solo, modo individual
 
 ## Forge
 
@@ -47,7 +59,7 @@ El nombre que GitLab da a la pull request. El flujo dice pull request para los d
 ## Tarea
 
 **Tarea**:
-Lo que se quiere hacer, desde la idea hasta la revisión. Tiene una issue, una rama de trabajo y una pull request.
+Lo que se quiere hacer, desde la idea hasta la revisión. Tiene una issue, una pull request y, en modo equipo, una rama de trabajo.
 _Evitar_: ticket, historia
 
 **Tipo**:
@@ -121,7 +133,7 @@ La rama `número-tipo-descripcion` de una issue.
 _Evitar_: feature branch
 
 **Commit vacío**:
-El primer commit de una rama de trabajo, `chore: open #N`, que permite abrir la pull request antes de tener cambios.
+El primer commit de una tarea, `chore: open #N`, que permite abrir la pull request antes de tener cambios.
 _Evitar_: commit inicial
 
 **Entrevista**:

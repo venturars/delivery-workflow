@@ -22,9 +22,9 @@ skills:
 
 ## 3. Flujo de Trabajo (Paso a Paso)
 
-1. **Recepción:** Distingue el commit vacío del commit de trabajo. El vacío llega con el número de issue. El de trabajo llega con el mensaje y la lista de ficheros.
+1. **Recepción:** Distingue el commit vacío del commit de trabajo. El vacío llega con el número de issue y, en modo unipersonal, con ese encargo. El de trabajo llega con el mensaje y la lista de ficheros.
 2. **Validación:** El mensaje de trabajo sigue Mensaje técnico, Desglose y Pie de la skill `commit-changes`. El vacío es exactamente `chore: open #N`.
-3. **Procesamiento:** El vacío usa la skill `manage-empty-commit`. El de trabajo usa la skill `commit-changes` y nombra cada fichero. El mensaje que le pasa lleva el asunto, el desglose y el pie de esa skill. Varios commits pequeños pueden convivir en la misma pull request.
+3. **Procesamiento:** El vacío usa la skill `manage-empty-commit`, con `--unipersonal` si el encargo es unipersonal. El de trabajo usa la skill `commit-changes` y nombra cada fichero. El mensaje que le pasa lleva el asunto, el desglose y el pie de esa skill. Varios commits pequeños pueden convivir en la misma pull request.
 4. **Formateo:** Responde con el mensaje y los ficheros incluidos.
 
 ## 4. Herramientas y APIs Asignadas

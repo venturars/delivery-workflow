@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Crea una PR contra la rama base, en draft, asignada al usuario autenticado y con la etiqueta del tipo.
+# Crea una PR contra la rama base, en draft salvo con --sin-draft, asignada al usuario autenticado y con la etiqueta del tipo.
 # En GitLab crea un merge request con gitlab.mjs.
 
 set -euo pipefail
@@ -41,8 +41,15 @@ detect_base() {
   return 1
 }
 
+# El modo unipersonal abre la pull request lista: --sin-draft va al final.
+draft=yes
+if [[ $# -gt 0 && "${!#}" == --sin-draft ]]; then
+  draft=no
+  set -- "${@:1:$#-1}"
+fi
+
 if [[ $# -lt 4 || $# -gt 5 || -z "$1" || -z "$2" || -z "$3" || -z "$4" ]]; then
-  echo "Uso: manage-pr-base.sh RAMA TITULO CUERPO TIPO [BASE]" >&2
+  echo "Uso: manage-pr-base.sh RAMA TITULO CUERPO TIPO [BASE] [--sin-draft]" >&2
   exit 1
 fi
 
@@ -123,7 +130,11 @@ if grep -Eq '#[0-9]' "$body"; then
 fi
 
 if [[ "$forge" == gitlab ]]; then
-  node "${here}/gitlab.mjs" mr create "$branch" "$title" "$body" "$type" "$base"
+  ready_args=()
+  if [[ "$draft" == no ]]; then
+    ready_args=(--sin-draft)
+  fi
+  node "${here}/gitlab.mjs" mr create "$branch" "$title" "$body" "$type" "$base" "${ready_args[@]+"${ready_args[@]}"}"
   echo "Base: ${base}"
   exit 0
 fi
@@ -136,5 +147,10 @@ else
   [[ $status -eq 2 ]] || exit "$status"
 fi
 
-gh pr create --base "$base" --head "$branch" --title "$title" --body-file "$body" --draft --assignee "@me" "${label_args[@]+"${label_args[@]}"}"
+draft_args=()
+if [[ "$draft" == yes ]]; then
+  draft_args=(--draft)
+fi
+
+gh pr create --base "$base" --head "$branch" --title "$title" --body-file "$body" "${draft_args[@]+"${draft_args[@]}"}" --assignee "@me" "${label_args[@]+"${label_args[@]}"}"
 echo "Base: ${base}"

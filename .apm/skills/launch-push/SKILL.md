@@ -16,5 +16,5 @@ No recibe argumentos. Equivale a `git push -u origin HEAD`.
 
 #### Reglas de Invocación Críticas
 
-- **Antes de lanzarla**: Comprueba que estás en una rama de trabajo distinta de la rama base y que hay al menos un commit que subir.
+- **Antes de lanzarla**: Comprueba que estás en una rama de trabajo distinta de la rama base (en modo unipersonal, en `staging`) y que hay al menos un commit que subir.
 - **Procesamiento de respuestas**: Si el código de salida es 0, la rama ya está en el remoto con su upstream: responde con la rama y el remoto. Un segundo push no hace falta. Si no es 0, comunica el mensaje de git. Si el push falla, espera la decisión de la persona: un `--force` reescribe el remoto, y esa decisión es suya.

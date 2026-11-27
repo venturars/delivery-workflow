@@ -1,6 +1,6 @@
 ---
 name: delivery-workflow
-description: "Orquestador del flujo de entrega: reconoce el momento (pensar la tarea, dejarla escrita, guardar un trozo, que la revisen, cambios pedidos u otra pasada) y llama al subagente o la skill que toca. Al dejar la tarea escrita arranca la rama, la pull request en draft y el ciclo de spec, código y tests. Úsala en cuanto la persona pide cualquiera de esos momentos."
+description: "Orquestador del flujo de entrega: reconoce el momento (pensar la tarea, dejarla escrita, guardar un trozo, que la revisen, cambios pedidos u otra pasada) y llama al subagente o la skill que toca. Al dejar la tarea escrita arranca la rama, la pull request en draft y el ciclo de spec, código y tests. En modo unipersonal trabaja en staging, una tarea cada vez, y abre la pull request sin draft. Úsala en cuanto la persona pide cualquiera de esos momentos."
 ---
 
 # Skill: Delivery workflow
@@ -13,13 +13,13 @@ description: "Orquestador del flujo de entrega: reconoce el momento (pensar la t
 
 ## 2. Contexto y Alcance
 
-- **Cuándo actuar:** En cuanto la persona pide pensar una tarea, dejarla escrita, guardar un trozo, que la revisen, cambios pedidos u otra pasada. Para hacer cambios en un proyecto, se hacen desde una rama nueva y una pull request nueva en draft, salvo los cambios pedidos sobre una PR ya abierta.
+- **Cuándo actuar:** En cuanto la persona pide pensar una tarea, dejarla escrita, guardar un trozo, que la revisen, cambios pedidos u otra pasada. Para hacer cambios en un proyecto, se hacen desde una rama nueva y una pull request nueva en draft, salvo los cambios pedidos sobre una PR ya abierta. En modo unipersonal manda la sección «Modo unipersonal».
 - **Límites de conocimiento:** Ejecuta git y llama al forge solo a través de las skills y los subagentes. En GitLab, la pull request es el merge request. Deja el código, la spec, el plan y las tasks a los subagentes que los escriben. El merge a la rama base lo hace la persona. Solo el orquestador lanza subagentes: un subagente que necesita otro devuelve la petición aquí.
 
 ## 3. Flujo de Trabajo (Paso a Paso)
 
 1. **Recepción:** Lee lo que pide la persona y el estado que devuelva la skill `check-status`, incluida la rama base.
-2. **Validación:** Elige un solo momento según el estado real de la tarea, no por la formulación del prompt. Si `check-status` dice que falta el token del `.env`, que el forge lo rechaza, o que faltan `gh` (en GitHub), `curl` (en GitLab) o Node 24+, para antes de cualquier paso que los use. Si la línea `Modelos:` dice «sin configurar» o «desincronizado», dilo una sola vez en toda la conversación (tras `apm install` o `apm update` hay que ejecutar `/configure-models`) y sigue: nunca bloquea. Antes de crear la issue:
+2. **Validación:** Elige un solo momento según el estado real de la tarea, no por la formulación del prompt. Si `check-status` dice que falta el token del `.env`, que el forge lo rechaza, o que faltan `gh` (en GitHub), `curl` (en GitLab) o Node 24+, para antes de cualquier paso que los use. Si la línea `Modo:` no es exactamente `Modo: equipo` o `Modo: unipersonal`, para y repite su motivo. Con `Modo: unipersonal`, aplica la sección «Modo unipersonal». Si la línea `Modelos:` dice «sin configurar» o «desincronizado», dilo una sola vez en toda la conversación (tras `apm install` o `apm update` hay que ejecutar `/configure-models`) y sigue: nunca bloquea. Antes de crear la issue:
    - Si el problema, el resultado esperado, el alcance, cómo comprobarlo y el tipo están claros y son coherentes con el proyecto, créala y explica brevemente por qué.
    - Si quedan dudas o contradicciones, usa la skill `help-me-to-think`. Repite una entrevista resuelta solo si hay cambios o decisiones nuevas.
 
@@ -49,6 +49,21 @@ description: "Orquestador del flujo de entrega: reconoce el momento (pensar la t
      5. El subagente `manage-pr`, encargo de revisión, con los logins que pidieron cambios. Marca con `--revision` la task de la fase Pull request cuyo agente es `manage-pr` cuando las revisiones queden pedidas.
    - **Otra pasada:** solo si la última pasada terminó Fallida y la persona lo confirma en este chat con palabras propias («otra pasada», «sí, otra»). El subagente `concept-developer` actualiza la spec y el plan con el informe, y el ciclo vuelve a la ronda 1. Si esa pasada era de una revisión, el encargo lleva revisión y se escribe en ese comentario, no en el cuerpo.
 4. **Formateo:** Responde con lo que hizo cada paso: número de issue y etiqueta, nombre de rama, URL de la pull request, rondas y cierres con su veredicto, observaciones de redacción corregidas y pendientes, mensaje del commit final y revisores pedidos.
+
+### Modo unipersonal
+
+Una persona sola trabaja en `staging`, una tarea cada vez, y lleva cada una a la rama por defecto con una pull request que fusiona ella. La rama por defecto es la de la línea `Rama por defecto:` de `check-status`. Los momentos son los de arriba, con estas diferencias:
+
+- **Una tarea cada vez:** antes de crear la issue, mira la línea `Pull request:`. Si nombra una abierta de `staging`, o dice que no se pudo consultar, para y dilo: la tarea nueva espera a que la abierta se fusione o se cierre.
+- **Dejarla escrita:** los pasos 1 y 2 son iguales. Después:
+  - paso 3: la skill `pull-changes` con `--unipersonal`, que adelanta `staging` y cambia a ella;
+  - paso 4: no se llama a `manage-branch`, porque no hay rama de tarea;
+  - paso 5: el subagente `manage-commit`, commit vacío, con el encargo unipersonal;
+  - paso 7: el subagente `manage-pr`, encargo de creación sin draft, con la rama `staging` y la rama por defecto como base;
+  - paso 9: con «solo git», para con la pull request abierta y enlazada, y di que no se fusiona hasta terminar el trabajo.
+- **Final del ciclo (paso 12):** no se piden revisores. Si la issue tiene una línea `Revisan:`, dilo. Di que la pull request está lista y que la persona la fusiona con merge commit, para que `staging` y la rama por defecto no diverjan.
+- **Si el ciclo falla:** la pull request sigue abierta. Di que no se fusiona hasta que otra pasada lo resuelva.
+- **Guardar un trozo y otra pasada:** los commits van en `staging`. Antes del commit, comprueba que `check-status` dice esa rama; si dice otra, lanza `pull-changes` con `--unipersonal`.
 
 ### El ciclo
 
@@ -85,10 +100,10 @@ El **bloque** son las tasks de `code-developer` de la issue. El ciclo las implem
 ## 4. Herramientas y APIs Asignadas
 
 - **Skill `help-me-to-think`:** Pensar la tarea antes de dejarla escrita.
-- **Skill `check-status`:** Saber la rama, la rama base, si hay token, `gh` o `curl`, y Node, si los agentes tienen modelo (`Modelos:`), si hay cambios, y si la rama tiene PR abierta con `reviewDecision` e issue, antes de elegir el momento.
+- **Skill `check-status`:** Saber la rama, la rama base, el modo, si hay token, `gh` o `curl`, y Node, si los agentes tienen modelo (`Modelos:`), si hay cambios, y si la rama tiene PR abierta con `reviewDecision` e issue, antes de elegir el momento.
 - **Skill `configure-models`:** Elegir el modelo de cada agente con la persona. Solo la nombras si la línea `Modelos:` lo pide; la ejecuta la persona con `/configure-models`.
-- **Skill `pull-changes`:** Adelantar la rama base antes de abrir la rama de trabajo.
-- **Skill `launch-push`:** Subir la rama de trabajo después de cada commit.
+- **Skill `pull-changes`:** Adelantar la rama base antes de abrir la rama de trabajo. En modo unipersonal, además cambia a `staging`.
+- **Skill `launch-push`:** Subir la rama de trabajo, o `staging` en modo unipersonal, después de cada commit.
 - **Skill `link-pr-to-issue`:** Enlazar la pull request con la issue y dejar `Closes #N` en el cuerpo. La llama el orquestador, no `manage-pr`.
 - **Skill `issue-spec`:** La huella de la parte de arriba, las casillas, el estado, los comentarios de ronda y de cierre y su rastro.
 - **Skill `say-it-straight`:** Prosa en español en issue, spec, PR y docs del ciclo.

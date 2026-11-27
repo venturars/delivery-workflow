@@ -1,12 +1,12 @@
 ---
 name: manage-pr-base
-description: "Abre la pull request de la rama de trabajo contra la rama base, en draft, asignada a la cuenta del token y con la etiqueta del tipo, en una sola llamada. Úsala desde el subagente manage-pr."
+description: "Abre la pull request de la rama de trabajo contra la rama base, en draft salvo en modo unipersonal, asignada a la cuenta del token y con la etiqueta del tipo, en una sola llamada. Úsala desde el subagente manage-pr."
 ---
 
 ### Herramienta: MANAGE_PR_BASE
 
-- **Descripción**: Úsala desde el subagente `manage-pr` para abrir la pull request contra la rama base, directamente en draft, asignada a la cuenta del token y con la etiqueta del tipo, en una misma invocación. Para enlazar la issue, usa `link-pr-to-issue`.
-- **Comando de Terminal**: `bash "<carpeta de esta skill>/scripts/manage-pr-base.sh" "[RAMA]" "[TITULO]" "[CUERPO]" "[TIPO]" "[BASE]"`
+- **Descripción**: Úsala desde el subagente `manage-pr` para abrir la pull request contra la rama base, directamente en draft (sin draft en modo unipersonal), asignada a la cuenta del token y con la etiqueta del tipo, en una misma invocación. Para enlazar la issue, usa `link-pr-to-issue`.
+- **Comando de Terminal**: `bash "<carpeta de esta skill>/scripts/manage-pr-base.sh" "[RAMA]" "[TITULO]" "[CUERPO]" "[TIPO]" "[BASE]" [--sin-draft]`
 
 El comando se lanza desde la raíz del repositorio git. La carpeta de esta skill es la que contiene este `SKILL.md`: en opencode, Cursor y Codex, `.agents/skills/manage-pr-base`; en Claude Code, `${CLAUDE_SKILL_DIR}`. En GitHub requiere GitHub CLI y el `GITHUB_TOKEN` del `.env` del proyecto: la cuenta del token será el autor de la PR y `--assignee "@me"` la persona asignada. El script usa el token del `.env`, no la sesión de `gh`.
 
@@ -23,10 +23,11 @@ Fuente de la forma del cuerpo: [github-pr](https://www.skills.sh/gentleman-progr
 3. **CUERPO** _(Obligatorio)_: Ruta de un fichero temporal con la descripción en español y la plantilla del tipo, `<carpeta de esta skill>/assets/<tipo>-pull-request.md`. Deja la sección Issue con `Closes #` sin número: lo completa `link-pr-to-issue`. Nombra la issue solo en la línea `Closes #`: en el resto del cuerpo no hace falta ni el número ni «la issue #N». Si el tipo no tiene plantilla, usa la más cercana.
 4. **TIPO** _(Obligatorio)_: `feat`, `fix`, `docs`, `refactor`, `test`, `chore` o `knowledge`. Es también la etiqueta.
 5. **BASE** _(Opcional)_: La base con la que se creó la rama, si no es la rama base detectada.
+6. **--sin-draft** _(Opcional, al final)_: Solo en modo unipersonal, con RAMA `staging` y BASE la rama por defecto: la pull request se abre lista, sin draft.
 
 #### Reglas de Invocación Críticas
 
 - **Etiqueta**: El script crea la etiqueta del tipo si falta, con `ensure-label.sh`. Si la cuenta no puede crearla, abre la PR sin etiqueta y lo dice: comunícalo.
 - **PR existente**: Si ya hay una PR abierta de esa rama hacia la base, el script devuelve su URL sin tocarla. Para actualizarla, usa `edit-pull-request` para el cuerpo y conserva la línea `Closes #N`. Usa `assign-author` y `manage-draft` cuando haga falta.
 - **Título**: Si el script dice que el título no vale, corrígelo según el mensaje y vuelve a lanzarlo.
-- **Procesamiento de respuestas**: Si el código de salida es 0, devuelve la URL y la base, y confirma draft, asignación y etiqueta. Si falla, comunica el error.
+- **Procesamiento de respuestas**: Si el código de salida es 0, devuelve la URL y la base, y confirma el draft (o que quedó lista, con `--sin-draft`), la asignación y la etiqueta. Si falla, comunica el error.
