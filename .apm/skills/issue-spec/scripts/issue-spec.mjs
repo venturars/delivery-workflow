@@ -92,6 +92,8 @@ export function findSecret(text) {
 export const TRUSTED_ROLES = ["OWNER", "MEMBER", "COLLABORATOR"];
 // GitHub devuelve además el texto tal como lo muestra, en body_text.
 const RENDERED = "Accept: application/vnd.github.full+json";
+// La API REST no dice qué hilos de una pull request están resueltos: solo GraphQL.
+const THREADS = "query($owner:String!,$name:String!,$n:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$n){reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor}nodes{isResolved comments(first:100){nodes{fullDatabaseId}}}}}}}";
 
 export function authorOf(item) {
   return item.author?.login ?? item.user?.login ?? "";
@@ -435,6 +437,9 @@ async function execute(
   const limits = api ? LIMITS : { issue: MAX_BODY, comment: MAX_BODY };
   const repo = options.repo ? ["--repo", options.repo] : [];
   const apiRepo = options.repo ? `repos/${options.repo}` : "repos/{owner}/{repo}";
+  // El dueño y el nombre para GraphQL. gh sustituye {owner} y {repo} en los campos -F.
+  const [owner, name] = options.repo ? options.repo.split("/") : ["{owner}", "{repo}"];
+  const repoFields = ["-F", `owner=${owner}`, "-F", `name=${name}`];
   const readIssueBody = async () => {
     if (api) return (await getIssue(api, number)).description ?? "";
     return JSON.parse(await call(["issue", "view", number, ...repo, "--json", "body"])).body ?? "";
@@ -492,6 +497,27 @@ async function execute(
     const parsed = JSON.parse((await call(["api", `${apiRepo}/${path}`, "--paginate", "-H", RENDERED])) || "[]");
     return Array.isArray(parsed) ? parsed : [parsed];
   };
+  // Marca los comentarios de línea de los hilos resueltos. Sin saber cuáles son, no se entrega ninguno.
+  const markResolved = async (pull, lineComments) => {
+    if (!lineComments.length) return lineComments;
+    const resolved = new Set();
+    let cursor = null;
+    do {
+      const after = cursor ? ["-f", `cursor=${cursor}`] : [];
+      const raw = await call(["api", "graphql", "-f", `query=${THREADS}`, ...repoFields, "-F", `n=${pull}`, ...after]);
+      const threads = JSON.parse(raw || "{}").data?.repository?.pullRequest?.reviewThreads;
+      if (!threads) throw new IssueSpecError("No se pudo saber qué hilos están resueltos. No se entrega ningún comentario.", 1);
+      for (const thread of threads.nodes.filter((node) => node.isResolved)) {
+        for (const comment of thread.comments.nodes) resolved.add(String(comment.fullDatabaseId));
+      }
+      cursor = threads.pageInfo.hasNextPage ? threads.pageInfo.endCursor : null;
+    } while (cursor);
+    // La consulta trae hasta 100 comentarios por hilo: las demás respuestas apuntan al primero.
+    return lineComments.map((comment) => ({
+      ...comment,
+      isResolved: resolved.has(String(comment.id)) || resolved.has(String(comment.in_reply_to_id)),
+    }));
+  };
   // Comentarios de ronda y de cierre de las cuentas aceptadas. En una revisión, los posteriores a su comentario.
   const roundNotes = async (revisionId) => {
     const viewer = await viewerLogin();
@@ -531,9 +557,8 @@ async function execute(
   }
   if (command === "can-edit") {
     if (api) return (await canEditIssue(api, number)) ? "yes" : "no";
-    const [owner, name] = options.repo ? options.repo.split("/") : ["{owner}", "{repo}"];
     const query = "query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){issue(number:$n){viewerCanUpdate}}}";
-    const raw = await call(["api", "graphql", "-f", `query=${query}`, "-F", `owner=${owner}`, "-F", `name=${name}`, "-F", `n=${number}`]);
+    const raw = await call(["api", "graphql", "-f", `query=${query}`, ...repoFields, "-F", `n=${number}`]);
     return JSON.parse(raw).data.repository.issue.viewerCanUpdate ? "yes" : "no";
   }
   if (command === "top-hash") return hashTop(parseBody((await source()).body).top);
@@ -600,7 +625,7 @@ async function execute(
     if (!pr) throw new IssueSpecError("No hay una pull request abierta que cierre esta issue.", 1);
     const reviews = await listRendered(`pulls/${pr.number}/reviews`);
     const comments = await listRendered(`issues/${pr.number}/comments`);
-    const lineComments = await listRendered(`pulls/${pr.number}/comments`);
+    const lineComments = await markResolved(pr.number, await listRendered(`pulls/${pr.number}/comments`));
     const screened = screenNotes({ reviews, comments, lineComments }, await viewerLogin(), accepted);
     return `${screenedLines(pr.reviewDecision, screened)}\n`;
   }

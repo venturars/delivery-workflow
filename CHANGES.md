@@ -76,6 +76,7 @@ Estos cambios las juntan en un paquete APM que se instala en cualquier proyecto 
 - **Al terminar.** «Para lo que hayas arrancado» deja de ser el servidor de Chroma: cualquier servidor, navegador o proceso que el ciclo arrancó se para antes del informe.
 - **Cambios pedidos en un comentario.** Si la pull request tiene `CHANGES_REQUESTED`, spec, plan y tasks van en un comentario `<!-- Revisión N -->` con las plantillas de siempre.
 - **Comentarios de cuentas aceptadas.** `issue-spec` usa la revisión y entrega los comentarios de la pull request solo de las cuentas aceptadas que define [su skill](.apm/skills/issue-spec/SKILL.md). `reviews` entrega el texto tal como el forge lo muestra y nombra a quien tenía comentarios HTML.
+- **Hilos resueltos.** En GitHub, `reviews` consulta por GraphQL qué hilos están resueltos, porque la API REST no lo dice, y deja fuera sus comentarios de línea. Si la consulta falla, no entrega ningún texto.
 - **Huecos.** Como en ChromaDB, `concept-developer` marca como hueco lo que el proyecto no responde y para. Aquí el orquestador pregunta a la persona y lo vuelve a llamar con las respuestas antes de la ronda 1.
 - **Consultas legales.** Nuevo. Si `concept-developer` o `concept-tester` devuelven dudas de protección de datos que la guía no resuelve, el orquestador llama a `legal-advisor` con todas y después a `concept-developer` con las respuestas, sin gastar ronda. Lo que `legal-advisor` no resuelve es un hueco.
 - **Sin aprobación humana.** Como en ChromaDB, el ciclo no espera a que nadie apruebe la spec.
