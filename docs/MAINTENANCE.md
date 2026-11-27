@@ -54,7 +54,7 @@ Una prueba de unos veinte minutos en un repositorio desechable, para comprobar e
 
    | Escribe | Tiene que pasar |
    |---|---|
-   | `/check-status` | `Rama base: main`, `Token de GitHub: GITHUB_TOKEN en .env`, `GitHub CLI: cuenta TU_LOGIN` y `Node: 20` o más. |
+   | `/check-status` | `Rama base: main`, `Token de GitHub: GITHUB_TOKEN en .env`, `GitHub CLI: cuenta TU_LOGIN` y `Node: 24` o más. |
    | `/configure-models` | Una tabla con agente, modelo y motivo, y la pregunta de aceptación. Tras aceptar: 9 archivos con `model` (`grep -l "^model" .cursor/agents/* .claude/agents/* .codex/agents/*`, según la herramienta), y `/check-status` con `Modelos: configurado (cursor 9/9)`. Tras otro `apm install` indica `desincronizado`, y `/configure-models` con Enter lo restaura. Sin la CLI de la herramienta no propone ningún modelo y permite indicar uno a mano. En Codex, `codex debug models` no está verificado con un Codex real: conviene revisar la propuesta. |
    | `/setup-context7` | Una tabla con las dependencias sugeridas (y las descartadas con motivo) y la pregunta de aceptación. Tras aceptar: `context7` en la config de usuario (`~/.cursor/mcp.json`, `~/.claude.json` o `~/.codex/config.toml`), nada en las configs MCP del proyecto, y un bloque «Context7» con las librerías en `AGENTS.md` o `CLAUDE.md`. Si `docs-rag` estaba registrado, desaparece. Repetirlo no cambia nada. Sin `--with-key` no hay cabecera. Con ella, `grep -n -i context7_api_key` muestra el nombre de la variable y nunca un valor, y las `notes` explican cómo cargar el `.env` (la clave se lee de ahí). Tras recargar el editor, «¿Cómo uso useState? use context7» llama a `resolve-library-id` y luego a `query-docs`. La sintaxis de la cabecera con variable de entorno no está probada con un editor real. |
    | `/setup-docs-rag` (con Docker, Ollama y `uv`; antes, `npm i zod@3.23.8` y un `.nvmrc` con `22`) | Una tabla con `zod 3.23.8` (origen `lockfile`) y el runtime `node 22`, y la pregunta de aceptación. Tras aceptar: el contenedor `docs-rag-qdrant` en marcha, `.docs-rag/` con `app/`, `venv/`, `inventory.json` y su `.gitignore` (`git status` no lo muestra), claves en inglés en `inventory.json` y `request.json`, `docs-rag` en `.mcp.json`, `.cursor/mcp.json` y `.codex/config.toml` del proyecto con rutas relativas, y nada de `docs-rag` en la config de usuario ni en `~/.docs-rag/`. Repetirlo dice `unchanged` y no descarga nada. Tras recargar el editor, «¿Cómo valido un email con zod?» llama a `resolve_package` y luego a `query_docs`, y la respuesta trae `results` con `source`, `text` y `rerank_score`. `context7` desaparece de la config de usuario y el bloque «Context7» de `AGENTS.md` o `CLAUDE.md`. En otro repositorio sin `.docs-rag/`, ni `docs-rag` ni Context7 aparecen. Después, `/setup-context7` vuelve a poner Context7 y quita `docs-rag` de la config del proyecto (`channel: context7`). |
@@ -67,12 +67,11 @@ Una prueba de unos veinte minutos en un repositorio desechable, para comprobar e
 
    Compruébalo también fuera del chat: `git log --oneline`, `gh issue view 1 --comments` y `gh pr view --web`.
 
-   Para probar las consultas legales, añade a `docs/CONSTITUTION.md` la sección `## Datos personales` con sus cuatro campos rellenos ([Protección de datos](../README.md#protección-de-datos)) y ejecuta `apm install`, que escribe el MCP `eur-lex`. Después, con un gestor de versiones de Node:
+   Para probar las consultas legales, añade a `docs/CONSTITUTION.md` la sección `## Datos personales` con sus cuatro campos rellenos ([Protección de datos](../README.md#protección-de-datos)) y ejecuta `apm install`, que escribe el MCP `eur-lex`. Después:
 
-   | Con | Escribe | Tiene que pasar |
-   |---|---|---|
-   | Node 24 | `/delivery-workflow` «Crea la issue y hazla: enviar el nombre y el correo de cada usuario a un chatbot alojado fuera del EEE» | `concept-developer` devuelve una consulta legal sobre transferencias internacionales (RGPD 44 a 49). El orquestador llama a `legal-advisor` antes de la ronda 1. La issue recibe un comentario `## Consultas legales` con la respuesta, los artículos y el CELEX `32016R0679` con la fecha. La spec recoge el requisito con `(CL-NN; RGPD …)`. |
-   | Node 20 | La misma tarea, en otro repositorio desechable o en una issue nueva | El comentario de `legal-advisor` dice que no usó EUR-Lex, o la consulta queda como hueco y el orquestador te la pregunta. |
+   | Escribe | Tiene que pasar |
+   |---|---|
+   | `/delivery-workflow` «Crea la issue y hazla: enviar el nombre y el correo de cada usuario a un chatbot alojado fuera del EEE» | `concept-developer` devuelve una consulta legal sobre transferencias internacionales (RGPD 44 a 49). El orquestador llama a `legal-advisor` antes de la ronda 1. La issue recibe un comentario `## Consultas legales` con la respuesta, los artículos y el CELEX `32016R0679` con la fecha. La spec recoge el requisito con `(CL-NN; RGPD …)`. |
 
    Abre una sesión nueva con el sandbox activo en cada herramienta. El repositorio configura el sandbox en `.claude/settings.json` (`sandbox.network.allowedDomains`) y en `.cursor/sandbox.json` (`networkPolicy.allow`), con `api.github.com` y `github.com` en los dos. El repositorio no activa el sandbox. En Claude Code, actívalo con `/sandbox`.
 
@@ -153,15 +152,17 @@ Los cambios entran en `staging` por pull request desde su rama de trabajo. Para 
 
 1. Fusiona los cambios de desarrollo en `staging`.
 2. Quien mantiene el paquete abre la pull request de `staging` a `main` y la fusiona.
-3. El push a `main` dispara `release-create-version.yml` («Release: create version»). El workflow busca la última etiqueta `vX.Y.Z`, reúne los commits y los ficheros cambiados desde ella y se los envía a la IA de Groq. La IA decide si el cambio es `major`, `minor` o `patch` y escribe el resumen. El workflow calcula la versión nueva, crea la etiqueta y la release con ese resumen y la lista de PR. No hace falta etiquetar a mano. Si el commit ya tiene etiqueta, no crea otra.
+3. El push a `main` dispara `release-create-version.yml` («Release: create version»). El workflow busca la última etiqueta `vX.Y.Z`. Si `HEAD` ya tiene etiqueta, no crea otra. Si desde la última etiqueta el único cambio es `version` en `apm.yml` y/o quitar la autodependencia, no llama a la IA ni crea otra etiqueta. Si hay trabajo real, reúne los commits y los ficheros, se los envía a la IA de Groq, calcula la versión nueva, crea la etiqueta y la release con ese resumen y la lista de PR. No hace falta etiquetar a mano.
 
-Este paquete no se lista a sí mismo en `dependencies.apm`. El `apm.yml` publicado es como `v1.2.3`: `mcp` (eur-lex) y nada de `venturars/delivery-workflow#…`. Quien mantiene el repo trabaja con `.apm/` local (`apm install --target …`), no con una etiqueta de GitHub.
+Tras crear la etiqueta `vX.Y.Z`, el workflow hace checkout de `staging`, escribe `version` en `apm.yml` con `X.Y.Z` (sin la `v`), quita `venturars/delivery-workflow` de `dependencies.apm` si está, y si hay cambios hace commit y `git push` a `staging`. No abre pull request. Si `staging` ya tiene esa versión y no lista el paquete, no crea commit.
+
+Este paquete no se lista a sí mismo en `dependencies.apm`. El `apm.yml` de la etiqueta es como el de `v1.2.3`: `mcp` (eur-lex) y nada de `venturars/delivery-workflow#…`. Quien mantiene el repo trabaja con `.apm/` local (`apm install --target …`), no con una etiqueta de GitHub.
 
 Si un merge a `main` volviera a traer esa autodependencia, `self-release.py align` la quita y la etiqueta apunta a ese commit, **sin** empujarlo a `main` (otro push a `main` sería otro release).
 
 El workflow necesita el secreto `GROQ_API_KEY` en el repositorio. Si falta, si la IA no responde o si su respuesta no es válida, el workflow falla y no crea etiqueta ni release.
 
-El workflow no cambia `version` en `apm.yml`. La versión publicada es la etiqueta.
+La versión que se ve en `staging` es la de ese push. El `apm.yml` de la etiqueta puede llevar un `version` anterior.
 
 Las releases estables usan etiquetas `vX.Y.Z`. Una IA decide el tipo de cambio, así que dos ejecuciones sobre los mismos commits pueden dar un resumen distinto.
 
