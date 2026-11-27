@@ -4,20 +4,37 @@ Esta guía lleva un cambio desde la issue hasta la pull request. La leen agentes
 
 ## Antes de empezar
 
-delivery-workflow es un paquete [APM](https://github.com/microsoft/apm) con skills y agentes que llevan una tarea de GitHub desde la idea hasta la revisión. Lee, en este orden:
+delivery-workflow es un paquete [APM](https://github.com/microsoft/apm) con skills y agentes que llevan una tarea desde la idea hasta la revisión en el forge del proyecto. Lee, en este orden:
 
 1. [README.md](README.md): qué hace el paquete, cómo se instala y cómo se usa.
 2. [GLOSSARY.md](GLOSSARY.md): el vocabulario del flujo.
 3. La issue del cambio: qué cambia y por qué.
 
-Necesitas `git`, [GitHub CLI](https://cli.github.com), Node, APM y un `.env` con tu token de GitHub. Para instalar el paquete en este repositorio, sigue [Trabajar en este repositorio](README.md#trabajar-en-este-repositorio).
+Necesitas `git`, [GitHub CLI](https://cli.github.com), Node, APM y un `.env` con tu token de GitHub. Para instalar el paquete en este repositorio, sigue [Trabajar en este repositorio](#trabajar-en-este-repositorio).
+
+## Trabajar en este repositorio
+
+Este repositorio es el paquete: su fuente son las skills y los agentes de `.apm/`. No instales aquí `venturars/delivery-workflow`, que es para [otro proyecto](README.md#instalar-el-paquete). Despliega la copia local para tener los agentes y las skills del flujo (`/delivery-workflow`, `/check-status`, `say-it-straight`…) mientras lo cambias.
+
+1. Clona el repositorio y entra en su raíz.
+2. Despliega el paquete local en tu herramienta (`opencode`, `claude`, `cursor`, `codex` o varias separadas por comas):
+
+   ```bash
+   apm install --target opencode
+   ```
+
+3. Crea el `.env` con tu token, como explica [El token de GitHub](README.md#el-token-de-github).
+4. Abre tu herramienta en la raíz. En opencode, ejecuta antes `/configure-models` ([Modelos de los agentes](docs/MODELS.md)).
+5. Llama al orquestador `delivery-workflow` ([cómo llamarlo](README.md#uso)) para abrir la issue, la rama y la pull request de tu cambio.
+
+Lo que genera `apm install` es de tu máquina y no se sube: `apm_modules/`, `apm.lock.yaml`, los directorios de tu herramienta y, con opencode, `opencode.json`, que no está en `.gitignore`. No los edites a mano: cambia `.apm/` y vuelve a ejecutar `apm install --target …`.
 
 ## Reglas
 
 - Trabaja siempre a partir de una issue.
 - Abre la pull request contra `staging`. `main` recibe cambios solo desde `staging`, en el release.
 - No uses `git push --force` ni `--no-verify`.
-- No commitees el `.env`, tu token ni la línea `model` de los agentes: es personal ([Modelos de los agentes](README.md#modelos-de-los-agentes)).
+- No commitees el `.env`, tu token ni la línea `model` de los agentes: es personal ([Modelos de los agentes](docs/MODELS.md)).
 - No edites a mano lo que genera `apm` (`apm_modules/`, `apm.lock.yaml`) ni cambies `version` en `apm.yml`: la versión sale de la etiqueta del release.
 - Di que algo funciona solo después de probarlo.
 
@@ -45,7 +62,7 @@ El tipo es el mismo en la etiqueta de la issue, la rama y el commit: `feat`, `fi
 
 ## Flujo de trabajo
 
-Puedes seguirlo a mano o pedirlo a `/delivery-workflow` (en Codex, `$delivery-workflow`), que hace los mismos pasos.
+Puedes seguirlo a mano o pedirlo al orquestador `delivery-workflow` ([cómo llamarlo](README.md#uso)), que hace los mismos pasos.
 
 1. Localiza la issue. Si no existe, créala con el formato de arriba.
 2. Crea la rama desde `staging`.
