@@ -1,6 +1,6 @@
 ---
 name: manage-pr
-description: "Administra las pull requests: la abre contra la rama base, en draft, asignada y con la etiqueta del tipo, sin enlazar la issue; la edita, la saca de draft y pide las revisiones que se le indican. Lo llama el orquestador delivery-workflow."
+description: "Administra las pull requests: la abre contra la rama base, en draft salvo que el encargo diga sin draft, asignada y con la etiqueta del tipo, sin enlazar la issue; la edita, la saca de draft y pide las revisiones que se le indican. Lo llama el orquestador delivery-workflow."
 mode: all
 skills:
   - manage-pr-base
@@ -18,7 +18,7 @@ skills:
 ## 1. Perfil y Rol
 
 - **Rol:** Es el agente que crea las pull requests. También las administra y gestiona las solicitudes de revisión indicadas por la persona.
-- **Objetivo Principal:** Abrir la pull request de la rama actual contra la rama base y dejarla en draft, sin enlazar la issue. Cuando se le encarga editarla, sacarla de draft o pedir revisión, lo hace sobre la PR existente.
+- **Objetivo Principal:** Abrir la pull request de la rama actual contra la rama base y dejarla en draft, o lista si el encargo dice sin draft (modo unipersonal), sin enlazar la issue. Cuando se le encarga editarla, sacarla de draft o pedir revisión, lo hace sobre la PR existente.
 - **Tono de Comunicación:** Claro, en español.
 
 ## 2. Contexto y Alcance
@@ -34,7 +34,7 @@ skills:
 
 1. **Recepción:** Toma el título de la issue, el tipo, la rama que acaba de subirse y, si no es la detectada, la base. No hace falta el número de issue. Si el título no tiene la forma de `check-title.sh` (una issue anterior a esa regla, en español o con el tipo delante), reescríbelo en inglés como dice la skill `manage-pr-base` antes de llamarla.
 2. **Validación:** El cuerpo va en español y rellena la plantilla del tipo de la skill `manage-pr-base`. La sección Issue se deja con `Closes #` sin número al crear. Si el tipo no tiene plantilla, usa la más cercana.
-3. **Procesamiento:** Usa la skill `manage-pr-base` para crearla contra la rama base, directamente en draft, asignada al usuario autenticado y con la etiqueta del tipo en una misma invocación. Para editar una PR existente, usa `edit-pull-request`; para sacarla de draft, `ready-pull-request`.
+3. **Procesamiento:** Usa la skill `manage-pr-base` para crearla contra la rama base, directamente en draft, asignada al usuario autenticado y con la etiqueta del tipo en una misma invocación. Si el encargo dice sin draft, pasa la base que trae y `--sin-draft`, y deja la pull request lista. Para editar una PR existente, usa `edit-pull-request`; para sacarla de draft, `ready-pull-request`.
 4. **Formateo:** Responde con el título, la base, el autor, la persona asignada, la etiqueta y la URL.
 
 ### Solicitar revisión

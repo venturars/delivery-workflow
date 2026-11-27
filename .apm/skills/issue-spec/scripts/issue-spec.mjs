@@ -92,6 +92,8 @@ export function findSecret(text) {
 export const TRUSTED_ROLES = ["OWNER", "MEMBER", "COLLABORATOR"];
 // GitHub devuelve además el texto tal como lo muestra, en body_text.
 const RENDERED = "Accept: application/vnd.github.full+json";
+// La API REST no dice qué hilos de una pull request están resueltos: solo GraphQL.
+const THREADS = "query($owner:String!,$name:String!,$n:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$n){reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor}nodes{isResolved comments(first:100){nodes{fullDatabaseId}}}}}}}";
 
 export function authorOf(item) {
   return item.author?.login ?? item.user?.login ?? "";
@@ -243,6 +245,13 @@ export function roundMark(body) {
   return first.match(ROUND_FIRST_LINE)?.[1] ?? null;
 }
 
+// Lo posterior a una fecha. Sin fecha de corte, todo; lo que no trae fecha no se descarta.
+export function newerThan(items, since) {
+  if (!since) return items;
+  const limit = Date.parse(since);
+  return items.filter((item) => !(Date.parse(item.submitted_at ?? item.created_at) <= limit));
+}
+
 // Los comentarios posteriores al último cierre: lo que todavía no se ha comprobado.
 export function sinceLastClose(notes) {
   return notes.slice(notes.findLastIndex((note) => note.mark === "Cierre") + 1);
@@ -272,12 +281,32 @@ function parseLogins(list = "") {
     .filter(Boolean);
 }
 
-// Las notas aceptadas, y debajo las cuentas omitidas y las que llevaban texto oculto.
-function screenedLines(reviewDecision, { notes, omitted, hidden }) {
-  const output = [formatReviewNotes({ reviewDecision, ...notes }).trimEnd()];
-  if (omitted.length) output.push(`Omitidos (cuentas sin rol en el repositorio): ${omitted.join(", ")}`);
-  if (hidden.length) output.push(`Texto oculto quitado en comentarios de: ${hidden.join(", ")}`);
-  return output.join("\n\n");
+// Las cuentas omitidas y las que llevaban texto oculto.
+function accountLines({ omitted, hidden }) {
+  const lines = [];
+  if (omitted.length) lines.push(`Omitidos (cuentas sin rol en el repositorio): ${omitted.join(", ")}`);
+  if (hidden.length) lines.push(`Texto oculto quitado en comentarios de: ${hidden.join(", ")}`);
+  return lines;
+}
+
+// Las notas aceptadas, y debajo las cuentas.
+function screenedLines(reviewDecision, screened) {
+  const notes = formatReviewNotes({ reviewDecision, ...screened.notes }).trimEnd();
+  return [notes, ...accountLines(screened)].join("\n\n");
+}
+
+export const NOTHING_PENDING = "No hay cambios pedidos desde la última revisión.";
+
+// En unipersonal nadie marca una decisión: o queda texto pendiente o se dice que no lo hay.
+function pendingLines(screened) {
+  const withBody = (list) => list.filter((item) => item.body?.trim());
+  const notes = {
+    reviews: withBody(screened.notes.reviews),
+    comments: withBody(screened.notes.comments),
+    lineComments: withBody(screened.notes.lineComments.filter((comment) => !comment.isResolved)),
+  };
+  if (Object.values(notes).some((list) => list.length)) return screenedLines(null, { ...screened, notes });
+  return [NOTHING_PENDING, ...accountLines(screened)].join("\n\n");
 }
 
 function closesIssue(body, number) {
@@ -286,11 +315,11 @@ function closesIssue(body, number) {
   );
 }
 
-// La revisión del merge request abierto que cierra la issue.
-async function gitlabReviewNotes(api, number, viewer, accepted) {
+// La revisión del merge request abierto que cierra la issue. En unipersonal cuenta también quien lo creó.
+async function gitlabReviewNotes(api, number, viewer, accepted, { solo = false, since = null } = {}) {
   const found = (await listOpenMergeRequests(api)).find((item) => closesIssue(item.description, number));
   if (!found) throw new IssueSpecError("No hay un merge request abierto que cierre esta issue.", 1);
-  const review = await reviewSummary(api, found);
+  const review = await reviewSummary(api, found, { withAuthor: solo });
   const roles = new Map();
   // Solo se pide el texto mostrado de las cuentas aceptadas.
   const withText = async (items, prefix = () => "") => {
@@ -308,7 +337,7 @@ async function gitlabReviewNotes(api, number, viewer, accepted) {
     path: note.position?.new_path ?? note.position?.old_path,
     line: note.position?.new_line ?? note.position?.old_line,
   })));
-  const reviews = review.notes.map((note) => ({
+  const reviews = newerThan(review.notes, since).map((note) => ({
     ...gitlabItem(note),
     state: review.askers.includes(note.author.username) ? "CHANGES_REQUESTED" : "COMMENTED",
   }));
@@ -319,6 +348,7 @@ async function gitlabReviewNotes(api, number, viewer, accepted) {
     viewer,
     accepted,
   );
+  if (solo) return `${pendingLines(screened)}\n`;
   const extra = [`Piden cambios: ${review.askers.join(", ") || "nadie"}`];
   if (!review.statesAvailable) extra.push("Esta instancia no dice quién pidió cambios: la decisión sale de los hilos y las aprobaciones.");
   return `${screenedLines(review.decision, screened)}\n\n${extra.join("\n")}\n`;
@@ -377,7 +407,7 @@ function parseArgs(args) {
   const [command, number, ...rest] = args;
   if (!command || !/^\d+$/.test(number ?? "")) {
     throw new IssueSpecError(
-      "Uso: can-edit N | read N [--revision] [--section top|spec|plan|tasks] | top-hash N [--revision] | write N --expect-top H [--revision] [--spec F] [--plan F] [--tasks F] | tick N TASK-NN --expect-top H [--revision] | state N Borrador|Implementada|Fallida --expect-top H [--revision] | comment N F | rounds N [--revision] [--since-close] [--accept LOGINS] | trace N [--revision] [--accept LOGINS] | reviews N [--accept LOGINS] | revision N F",
+      "Uso: can-edit N | read N [--revision] [--section top|spec|plan|tasks] | top-hash N [--revision] | write N --expect-top H [--revision] [--spec F] [--plan F] [--tasks F] | tick N TASK-NN --expect-top H [--revision] | state N Borrador|Implementada|Fallida --expect-top H [--revision] | comment N F | rounds N [--revision] [--since-close] [--accept LOGINS] | trace N [--revision] [--accept LOGINS] | reviews N [--accept LOGINS] [--unipersonal] | revision N F",
       1,
     );
   }
@@ -385,6 +415,7 @@ function parseArgs(args) {
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === "--revision") options.revision = true;
     else if (rest[i] === "--since-close") options.sinceClose = true;
+    else if (rest[i] === "--unipersonal") options.solo = true;
     else if (rest[i].startsWith("--")) options[rest[i].slice(2)] = rest[++i];
     else options.positional.push(rest[i]);
   }
@@ -435,6 +466,9 @@ async function execute(
   const limits = api ? LIMITS : { issue: MAX_BODY, comment: MAX_BODY };
   const repo = options.repo ? ["--repo", options.repo] : [];
   const apiRepo = options.repo ? `repos/${options.repo}` : "repos/{owner}/{repo}";
+  // El dueño y el nombre para GraphQL. gh sustituye {owner} y {repo} en los campos -F.
+  const [owner, name] = options.repo ? options.repo.split("/") : ["{owner}", "{repo}"];
+  const repoFields = ["-F", `owner=${owner}`, "-F", `name=${name}`];
   const readIssueBody = async () => {
     if (api) return (await getIssue(api, number)).description ?? "";
     return JSON.parse(await call(["issue", "view", number, ...repo, "--json", "body"])).body ?? "";
@@ -492,6 +526,33 @@ async function execute(
     const parsed = JSON.parse((await call(["api", `${apiRepo}/${path}`, "--paginate", "-H", RENDERED])) || "[]");
     return Array.isArray(parsed) ? parsed : [parsed];
   };
+  // Marca los comentarios de línea de los hilos resueltos. Sin saber cuáles son, no se entrega ninguno.
+  const markResolved = async (pull, lineComments) => {
+    if (!lineComments.length) return lineComments;
+    const resolved = new Set();
+    let cursor = null;
+    do {
+      const after = cursor ? ["-f", `cursor=${cursor}`] : [];
+      const raw = await call(["api", "graphql", "-f", `query=${THREADS}`, ...repoFields, "-F", `n=${pull}`, ...after]);
+      const threads = JSON.parse(raw || "{}").data?.repository?.pullRequest?.reviewThreads;
+      if (!threads) throw new IssueSpecError("No se pudo saber qué hilos están resueltos. No se entrega ningún comentario.", 1);
+      for (const thread of threads.nodes.filter((node) => node.isResolved)) {
+        for (const comment of thread.comments.nodes) resolved.add(String(comment.fullDatabaseId));
+      }
+      cursor = threads.pageInfo.hasNextPage ? threads.pageInfo.endCursor : null;
+    } while (cursor);
+    // La consulta trae hasta 100 comentarios por hilo: las demás respuestas apuntan al primero.
+    return lineComments.map((comment) => ({
+      ...comment,
+      isResolved: resolved.has(String(comment.id)) || resolved.has(String(comment.in_reply_to_id)),
+    }));
+  };
+  // La fecha del último comentario de revisión aceptado de la issue: lo general anterior ya se atendió.
+  const lastRevisionDate = async () => {
+    const viewer = await viewerLogin();
+    const revisions = await withRoles((await listComments()).filter((comment) => isRevisionComment(comment.body ?? "")));
+    return revisions.filter((comment) => isTrusted(comment, viewer)).at(-1)?.created_at ?? null;
+  };
   // Comentarios de ronda y de cierre de las cuentas aceptadas. En una revisión, los posteriores a su comentario.
   const roundNotes = async (revisionId) => {
     const viewer = await viewerLogin();
@@ -531,9 +592,8 @@ async function execute(
   }
   if (command === "can-edit") {
     if (api) return (await canEditIssue(api, number)) ? "yes" : "no";
-    const [owner, name] = options.repo ? options.repo.split("/") : ["{owner}", "{repo}"];
     const query = "query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){issue(number:$n){viewerCanUpdate}}}";
-    const raw = await call(["api", "graphql", "-f", `query=${query}`, "-F", `owner=${owner}`, "-F", `name=${name}`, "-F", `n=${number}`]);
+    const raw = await call(["api", "graphql", "-f", `query=${query}`, ...repoFields, "-F", `n=${number}`]);
     return JSON.parse(raw).data.repository.issue.viewerCanUpdate ? "yes" : "no";
   }
   if (command === "top-hash") return hashTop(parseBody((await source()).body).top);
@@ -594,15 +654,17 @@ async function execute(
   }
   if (command === "reviews") {
     const accepted = parseLogins(options.accept);
-    if (api) return gitlabReviewNotes(api, number, await viewerLogin(), accepted);
+    const since = options.solo ? await lastRevisionDate() : null;
+    if (api) return gitlabReviewNotes(api, number, await viewerLogin(), accepted, { solo: options.solo, since });
     const prs = JSON.parse(await call(["pr", "list", ...repo, "--state", "open", "--json", "number,body,url,reviewDecision"])) || [];
     const pr = (Array.isArray(prs) ? prs : []).find((item) => closesIssue(item.body, number));
     if (!pr) throw new IssueSpecError("No hay una pull request abierta que cierre esta issue.", 1);
     const reviews = await listRendered(`pulls/${pr.number}/reviews`);
     const comments = await listRendered(`issues/${pr.number}/comments`);
-    const lineComments = await listRendered(`pulls/${pr.number}/comments`);
-    const screened = screenNotes({ reviews, comments, lineComments }, await viewerLogin(), accepted);
-    return `${screenedLines(pr.reviewDecision, screened)}\n`;
+    const lineComments = await markResolved(pr.number, await listRendered(`pulls/${pr.number}/comments`));
+    const recent = { reviews: newerThan(reviews, since), comments: newerThan(comments, since), lineComments };
+    const screened = screenNotes(recent, await viewerLogin(), accepted);
+    return `${options.solo ? pendingLines(screened) : screenedLines(pr.reviewDecision, screened)}\n`;
   }
   if (command === "revision") {
     const file = options.positional[0];

@@ -28,7 +28,7 @@ const LABELS = {
 const USAGE = [
   "Uso: gitlab.mjs forge | status | whoami | member check USUARIO | label ensure TIPO",
   "  issue create TITULO CUERPO TIPO | issue state N | issue close N [completed|not planned] | issue reopen N | issue assign-me N",
-  "  mr find RAMA BASE | mr create RAMA TITULO CUERPO TIPO BASE | mr status RAMA | mr view N | mr edit N [--title T] [--body-file F]",
+  "  mr find RAMA BASE | mr create RAMA TITULO CUERPO TIPO BASE [--sin-draft] | mr status RAMA [BASE] | mr view N | mr edit N [--title T] [--body-file F]",
   "  mr draft N | mr ready N | mr assign-me N | mr request-review N USUARIO...",
 ].join("\n");
 // Los prefijos con los que GitLab marca un merge request como draft.
@@ -538,7 +538,7 @@ export async function forkWarning(client) {
     : null;
 }
 
-export async function createMergeRequest(client, { branch, base, title, body, type }, warn = console.error) {
+export async function createMergeRequest(client, { branch, base, title, body, type, draft = true }, warn = console.error) {
   checkText(body);
   const fork = await forkWarning(client);
   if (fork) warn(fork);
@@ -546,11 +546,12 @@ export async function createMergeRequest(client, { branch, base, title, body, ty
   const label = await typeLabel(client, type, lines, warn);
   const me = await whoami(client);
   const request = {
-    source_branch: branch, target_branch: base, title: withDraft(title, true), description: body,
+    source_branch: branch, target_branch: base, title: withDraft(title, draft), description: body,
     assignee_ids: [me.id], ...(label ? { labels: label } : {}),
   };
   const { data } = await client.request("POST", client.scoped("merge_requests"), { body: request });
-  if (!data.draft) warn("El merge request no quedó en draft: pásalo a draft a mano.");
+  if (draft && !data.draft) warn("El merge request no quedó en draft: pásalo a draft a mano.");
+  if (!draft && data.draft) warn("El merge request quedó en draft: márcalo como listo a mano.");
   checkCreated("El merge request", data, me, label, warn);
   return [...lines, data.web_url].join("\n");
 }
@@ -591,18 +592,19 @@ export async function reviewStates(client, number) {
 }
 
 // Pide cambios quien lo marcó en su revisión o dejó un hilo sin resolver. El autor no cuenta.
-export async function reviewSummary(client, mergeRequest) {
+// Con withAuthor cuenta lo de cualquiera, también quien creó el merge request: es el modo unipersonal.
+export async function reviewSummary(client, mergeRequest, { withAuthor = false } = {}) {
   const number = mergeRequest.iid;
   const states = await reviewStates(client, number);
   const discussions = await client.paginate(mrPath(client, number, "/discussions"));
   const requested = states ? [...states].filter(([, state]) => state === "REQUESTED_CHANGES").map(([name]) => name) : [];
-  const threads = discussions.filter((thread) =>
-    thread.notes.some((note) => note.resolvable && !note.resolved) && thread.notes[0].author.id !== mergeRequest.author.id);
+  const threads = discussions.filter((thread) => thread.notes.some((note) => note.resolvable && !note.resolved)
+    && (withAuthor || thread.notes[0].author.id !== mergeRequest.author.id));
   const askers = [...new Set([...requested, ...threads.map((thread) => thread.notes[0].author.username)])];
   // Un comentario general no es un hilo: se recoge de quien pide cambios. Si la instancia no dice quién los
   // marcó en su revisión, de cualquiera que no sea el autor.
   const notes = discussions.flatMap((thread) => thread.notes).filter((note) => !note.resolvable && !note.system
-    && note.author.id !== mergeRequest.author.id && (!states || askers.includes(note.author.username)));
+    && (withAuthor || (note.author.id !== mergeRequest.author.id && (!states || askers.includes(note.author.username)))));
   let decision = "CHANGES_REQUESTED";
   if (!askers.length) {
     const { data } = await client.request("GET", mrPath(client, number, "/approvals"));
@@ -729,12 +731,12 @@ export async function status(options = {}) {
   return lines.join("\n");
 }
 
-// La línea de check-status sobre el merge request de la rama.
-export async function statusLine(client, branch) {
+// La línea de check-status sobre el merge request de la rama. Con base, solo el que va a esa rama.
+export async function statusLine(client, branch, base) {
   const fork = await forkWarning(client);
   const lines = (line) => [fork, line].filter(Boolean).join("\n");
-  const found = await findMergeRequest(client, branch);
-  if (!found) return lines("Pull request: ninguna abierta en esta rama");
+  const found = await findMergeRequest(client, branch, base);
+  if (!found) return lines(`Pull request: ninguna abierta ${base ? `de ${branch} a ${base}` : "en esta rama"}`);
   const { decision } = await reviewSummary(client, found);
   const issue = (found.description ?? "").match(/(?:closes|close|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+#(\d+)/i);
   return lines(`Pull request: #${found.iid} ${decision}${issue ? ` issue #${issue[1]}` : ""}`);
@@ -778,11 +780,12 @@ async function runMergeRequest(action, rest, options) {
   const { warn = console.error } = options;
   const filled = (count) => rest.length === count && rest.every(Boolean);
   if (action === "find" && filled(2)) return (await findMergeRequest(await connect(options), ...rest))?.web_url ?? "";
-  if (action === "status" && filled(1)) return statusLine(await connect(options), rest[0]);
-  if (action === "create" && filled(5)) {
+  if (action === "status" && (filled(1) || filled(2))) return statusLine(await connect(options), ...rest);
+  const ready = rest.length === 6 && rest[5] === "--sin-draft";
+  if (action === "create" && (filled(5) || (ready && filled(6)))) {
     const [branch, title, file, type, base] = rest;
     const body = await readBody(file, options);
-    return createMergeRequest(await connect(options), { branch, base, title, body, type }, warn);
+    return createMergeRequest(await connect(options), { branch, base, title, body, type, draft: !ready }, warn);
   }
   const [value, ...extra] = rest;
   if (action === "edit") {

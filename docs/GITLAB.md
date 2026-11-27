@@ -23,7 +23,7 @@ Si tu sandbox limita los dominios, permite `gitlab.com` o el host de tu instanci
 
 ## Diferencias con GitHub
 
-- **Cambios pedidos:** los marca un revisor, o queda sin resolver un hilo de alguien distinto del autor.
+- **Cambios pedidos:** los marca un revisor, o queda sin resolver un hilo de alguien distinto del autor. En modo unipersonal se piden en el chat y cuentan también los hilos y comentarios del autor.
 - **Aprobado:** hay al menos una aprobación y ninguna pendiente.
 - **Revisores:** algunos planes admiten solo uno. El flujo nombra a quien queda sin pedir.
 - **Cierre de una issue:** GitLab no guarda el motivo.

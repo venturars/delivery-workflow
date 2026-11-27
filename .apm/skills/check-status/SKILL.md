@@ -1,11 +1,11 @@
 ---
 name: check-status
-description: "Resume la rama actual, la rama base, si el .env tiene el token del forge, la cuenta del token y Node 24+, el remoto y los cambios sin commit. Úsala antes de elegir el momento."
+description: "Resume la rama actual, la rama base, el modo de trabajo, si el .env tiene el token del forge, la cuenta del token y Node 24+, el remoto y los cambios sin commit. Úsala antes de elegir el momento."
 ---
 
 ### Herramienta: CHECK_STATUS
 
-- **Descripción**: Úsala cuando necesites saber la rama actual, la rama base, si hay cambios sin commit, si la rama sigue a un remoto, si el `.env` del proyecto tiene el token del forge, de qué cuenta es, si está Node 24+ y si los agentes tienen modelo.
+- **Descripción**: Úsala cuando necesites saber la rama actual, la rama base, el modo de trabajo, si hay cambios sin commit, si la rama sigue a un remoto, si el `.env` del proyecto tiene el token del forge, de qué cuenta es, si está Node 24+ y si los agentes tienen modelo.
 
 - **Comando de Terminal**: `bash "<carpeta de esta skill>/scripts/check-status.sh"`
 
@@ -17,7 +17,8 @@ No recibe argumentos.
 
 #### Reglas de Invocación Críticas
 
-- **Procesamiento de respuestas**: El script escribe, en este orden, el repositorio, la rama, la rama base, el token de GitHub y GitHub CLI (en GitLab, `Forge:` con el host, el token de GitLab y la cuenta), Node, los modelos de los agentes (`Modelos:`: sin configurar, configurado o desincronizado), el remoto con los commits por subir y por bajar, el último commit, la pull request abierta de esta rama si hay token (número, `reviewDecision` e issue de `Closes #N`), los ficheros preparados, los modificados sin preparar y los que no tienen seguimiento. Si el código de salida no es 0, lee el error y comunícalo. Toma la rama y los ficheros solo de la salida del script. Si la línea de la pull request dice `CHANGES_REQUESTED` y una issue, el momento es cambios pedidos.
+- **Procesamiento de respuestas**: El script escribe, en este orden, el repositorio, la rama, la rama base, el modo (`Modo:`, y en unipersonal `Rama por defecto:`), el token de GitHub y GitHub CLI (en GitLab, `Forge:` con el host, el token de GitLab y la cuenta), Node, los modelos de los agentes (`Modelos:`: sin configurar, configurado o desincronizado), el remoto con los commits por subir y por bajar, el último commit, la pull request abierta de esta rama si hay token (número, `reviewDecision` e issue de `Closes #N`), los ficheros preparados, los modificados sin preparar y los que no tienen seguimiento. Si el código de salida no es 0, lee el error y comunícalo. Toma la rama y los ficheros solo de la salida del script. Si la línea de la pull request dice `CHANGES_REQUESTED` y una issue, el momento es cambios pedidos.
+- **Modo**: Sale de `.delivery-workflow.yml`, en la raíz: una sola línea `modo: equipo` o `modo: unipersonal`, con comillas o comentarios si se quiere. Sin fichero, el modo es `equipo`. `Modo: equipo` y `Modo: unipersonal` son las dos líneas correctas: cualquier otra dice qué falta, y el flujo para. En unipersonal, la línea `Pull request:` es la abierta de `staging` a la rama por defecto, se esté en la rama que se esté; si dice «no se pudo consultar», no des por hecho que no hay ninguna.
 - **Forge**: Sale de `GIT_WORKFLOW_FORGE` (`github` o `gitlab`), del entorno o del `.env`. Sin ella, un `origin` en `gitlab.com` es GitLab y cualquier otro host es GitHub. En una instancia propia de GitLab se declara `GIT_WORKFLOW_FORGE=gitlab`, y `GIT_WORKFLOW_FORGE_URL` da la dirección `https://` cuando la web no está en el host de `origin`. GitHub usa `GITHUB_TOKEN` y GitLab usa `GITLAB_TOKEN`.
 - **Cambios pedidos en GitLab**: La línea dice `CHANGES_REQUESTED` si un revisor pidió cambios o si queda sin resolver un hilo abierto por alguien distinto del autor. Sigue así hasta que se resuelve. Dice `APPROVED` con alguna aprobación y ninguna pendiente.
 - **Forks en GitLab**: No se admiten. Si sale el aviso de fork, comunícalo: el flujo no ve ni abre merge requests hacia el proyecto original.

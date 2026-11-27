@@ -39,14 +39,22 @@ detect_base() {
   return 1
 }
 
-if [[ $# -gt 0 ]]; then
-  echo "pull-changes.sh no recibe argumentos." >&2
+solo=no
+if [[ $# -eq 1 && "$1" == --unipersonal ]]; then
+  solo=yes
+elif [[ $# -gt 0 ]]; then
+  echo "Uso: pull-changes.sh [--unipersonal]" >&2
   exit 1
 fi
 
 git fetch origin
 
 base=$(detect_base)
+
+if [[ "$solo" == yes && "$base" != staging ]]; then
+  echo "En modo unipersonal la rama base es staging, no ${base}." >&2
+  exit 1
+fi
 
 if ! git show-ref --verify --quiet "refs/remotes/origin/${base}"; then
   echo "No existe origin/${base}." >&2
@@ -68,3 +76,8 @@ else
 fi
 
 echo "${base} quedó en $(git rev-parse --short "$base")."
+
+# En unipersonal no hay rama de tarea: se trabaja en staging.
+if [[ "$solo" == yes && $(git rev-parse --abbrev-ref HEAD) != "$base" ]]; then
+  git switch "$base"
+fi

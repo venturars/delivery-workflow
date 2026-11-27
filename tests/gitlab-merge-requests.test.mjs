@@ -100,6 +100,34 @@ test("manage-pr-base abre el merge request en draft, asignado y etiquetado, y no
   assert.equal(gl.ghCalls(), "");
 });
 
+test("manage-pr-base --sin-draft abre el merge request listo", () => {
+  const gl = project();
+  writeFileSync(join(gl.repo, "mr.md"), "Cambio.\n\nCloses #\n");
+  const result = gl.script("manage-pr-base/scripts/manage-pr-base.sh", "staging", "Add notes", "mr.md", "feat", "main", "--sin-draft");
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, /draft/);
+  const item = gl.state().mergeRequests[1];
+  assert.deepEqual([item.title, item.draft, item.source_branch, item.target_branch], ["Add notes", false, "staging", "main"]);
+});
+
+test("check-status en modo unipersonal nombra solo el merge request de staging a la rama por defecto", () => {
+  const solo = (mergeRequests) => {
+    const gl = project({ mergeRequests });
+    writeFileSync(join(gl.repo, ".delivery-workflow.yml"), "modo: unipersonal\n");
+    const git = (...args) => execFileSync("git", ["-C", gl.repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", ...args]);
+    git("commit", "-q", "--allow-empty", "-m", "init");
+    for (const branch of ["main", "staging"]) git("update-ref", `refs/remotes/origin/${branch}`, "HEAD");
+    const result = gl.status();
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^Modo: unipersonal\nRama por defecto: main$/m);
+    return result.stdout.match(/^Pull request: .*$/m)[0];
+  };
+  const toStaging = mergeRequest();
+  assert.equal(solo({ 1: toStaging }), "Pull request: ninguna abierta de staging a main");
+  const release = mergeRequest({ iid: 2, source_branch: "staging", target_branch: "main" });
+  assert.equal(solo({ 1: toStaging, 2: release }), "Pull request: #2 — issue #7");
+});
+
 test("un merge request de un fork con la misma rama no cuenta", () => {
   const gl = project({ mergeRequests: { 1: mergeRequest({ source_project_id: 9 }) } });
   assert.match(gl.open().stdout, /merge_requests\/2/);
@@ -205,6 +233,24 @@ test("check-status dice que falta Node y termina", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^Forge: GitLab\. No se puede comprobar.*sin Node/m);
   assert.match(result.stdout, /^Node: no instalado/m);
+});
+
+test("issue-spec reviews --unipersonal cuenta lo de quien creó el merge request y corta por la revisión", () => {
+  const note = (body, day) => ({ notes: [{ author: ADA, body, system: false, resolvable: false, created_at: `2026-11-${day}T10:00:00Z` }] });
+  const revision = { id: 1, author: ADA, system: false, body: "<!-- Revisión 1 -->", created_at: "2026-11-05T10:00:00Z" };
+  const gl = project({
+    issues: { 7: { iid: 7, state: "opened", description: "x", author: ADA, assignees: [], notes: [revision] } },
+    mergeRequests: { 1: mergeRequest({ discussions: [note("Nota atendida", "04"), note("Nota pendiente", "06"), thread(ADA), thread(ADA, true, "Resuelto")] }) },
+  });
+  const solo = gl.spec("reviews", "7", "--unipersonal");
+  assert.equal(solo.status, 0, solo.stderr);
+  // Quien tiene un hilo sin resolver pide cambios, también quien creó el merge request.
+  assert.match(solo.stdout, /## ada \(CHANGES_REQUESTED\)\n2026-11-06: Nota pendiente/);
+  assert.match(solo.stdout, /- ada src\/a\.js:3: Cambia esto/);
+  assert.doesNotMatch(solo.stdout, /Nota atendida|Resuelto|Piden cambios/);
+  const team = gl.spec("reviews", "7");
+  assert.equal(team.status, 0, team.stderr);
+  assert.doesNotMatch(team.stdout, /Nota pendiente|Cambia esto/);
 });
 
 test("issue-spec reviews resume la revisión del merge request que cierra la issue", () => {

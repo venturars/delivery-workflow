@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Resume la rama, la rama base, el forge, el token del .env, Node, el remoto y los cambios locales.
+# Resume la rama, la rama base, el modo, el forge, el token del .env, Node, el remoto y los cambios locales.
 
 set -euo pipefail
 
@@ -38,6 +38,43 @@ detect_base() {
   return 1
 }
 
+# Rama por defecto de origin: origin/HEAD, o main o master.
+default_branch() {
+  local head candidate
+  if head=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null); then
+    echo "${head#origin/}"
+    return
+  fi
+  for candidate in main master; do
+    if git show-ref --verify --quiet "refs/remotes/origin/${candidate}"; then
+      echo "$candidate"
+      return
+    fi
+  done
+  return 1
+}
+
+# Modo de .delivery-workflow.yml: una sola línea «modo: equipo» o «modo: unipersonal». Sin fichero, equipo.
+read_mode() {
+  local file=.delivery-workflow.yml line value="" found=0
+  local blank='^[[:space:]]*(#.*)?$'
+  local entry='^modo:[[:space:]]+("(equipo|unipersonal)"|'\''(equipo|unipersonal)'\''|(equipo|unipersonal))([[:space:]]+#.*)?[[:space:]]*$'
+  if [[ ! -e "$file" && ! -L "$file" ]]; then
+    echo equipo
+    return
+  fi
+  [[ -f "$file" && -r "$file" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line=${line%$'\r'}
+    [[ "$line" =~ $blank ]] && continue
+    [[ "$line" =~ $entry ]] || return 1
+    value=${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}
+    found=$((found + 1))
+  done <"$file"
+  [[ $found -eq 1 ]] || return 1
+  echo "$value"
+}
+
 list_changes() {
   local changes=$1
   local status path rest label
@@ -73,6 +110,33 @@ if base=$(detect_base 2>/dev/null); then
   echo "Rama base: ${base}"
 else
   echo "Rama base: no detectada. Defínela con GIT_WORKFLOW_BASE."
+fi
+
+# solo_target queda con la rama de destino solo cuando el modo unipersonal puede usarse.
+solo_target=""
+if ! mode=$(read_mode); then
+  echo "Modo: no válido. .delivery-workflow.yml lleva una sola línea «modo: equipo» o «modo: unipersonal»."
+elif [[ "$mode" == equipo ]]; then
+  echo "Modo: equipo"
+else
+  target=$(default_branch) || target=""
+  problem=""
+  if ! git show-ref --verify --quiet refs/remotes/origin/staging; then
+    problem="Falta la rama staging en origin. Créala, o ejecuta git fetch si ya existe."
+  elif [[ "$base" != staging ]]; then
+    problem="La rama base es ${base:-desconocida} y tiene que ser staging: quita GIT_WORKFLOW_BASE."
+  elif [[ -z "$target" ]]; then
+    problem="No se pudo detectar la rama por defecto de origin."
+  elif [[ "$target" == staging ]]; then
+    problem="La rama por defecto es staging y tiene que ser otra, como main."
+  fi
+  if [[ -n "$problem" ]]; then
+    echo "Modo: unipersonal. ${problem}"
+  else
+    echo "Modo: unipersonal"
+    echo "Rama por defecto: ${target}"
+    solo_target=$target
+  fi
 fi
 
 gitlab="$(dirname "${BASH_SOURCE[0]}")/gitlab.mjs"
@@ -181,30 +245,47 @@ else
   echo "Último commit: todavía no hay commits"
 fi
 
+# En unipersonal la pull request es la de staging a la rama por defecto, se esté en la rama que se esté.
 if [[ "$forge" == gitlab ]]; then
   if command -v node >/dev/null 2>&1; then
-    if pr_line=$(node "$gitlab" mr status "$branch" 2>"$forge_error"); then
+    pr_branches=("$branch")
+    if [[ -n "$solo_target" ]]; then
+      pr_branches=(staging "$solo_target")
+    fi
+    if pr_line=$(node "$gitlab" mr status "${pr_branches[@]}" 2>"$forge_error"); then
       echo "$pr_line"
     else
       echo "Pull request: no se pudo consultar. $(cat "$forge_error")"
     fi
   fi
 elif [[ "$token" == yes ]] && command -v gh >/dev/null 2>&1; then
-  pr_json=$(gh pr view --json number,reviewDecision,body 2>/dev/null || true)
-  if ! echo "$pr_json" | grep -q '"number"'; then
-    echo "Pull request: ninguna abierta en esta rama"
+  pr_failed=no
+  if [[ -n "$solo_target" ]]; then
+    none="ninguna abierta de staging a ${solo_target}"
+    pr_json=$(gh pr list --head staging --base "$solo_target" --state open --json number,reviewDecision,body,isCrossRepository 2>"$forge_error") &&
+      [[ -n "$pr_json" ]] || pr_failed=yes
+  else
+    none="ninguna abierta en esta rama"
+    pr_json=$(gh pr view --json number,reviewDecision,body 2>/dev/null || true)
+  fi
+  if [[ "$pr_failed" == yes ]]; then
+    echo "Pull request: no se pudo consultar. $(cat "$forge_error")"
+  elif ! echo "$pr_json" | grep -q '"number"'; then
+    echo "Pull request: ${none}"
   elif ! command -v node >/dev/null 2>&1; then
     echo "Pull request: no se pudo comprobar (falta Node)"
   else
     pr_line=$(printf '%s' "$pr_json" | node -e '
       const fs = require("fs");
-      const p = JSON.parse(fs.readFileSync(0, "utf8"));
+      // La lista de unipersonal trae también las ramas staging de otros repositorios.
+      const p = [].concat(JSON.parse(fs.readFileSync(0, "utf8"))).find((item) => !item.isCrossRepository);
+      if (!p) process.exit(0);
       const body = p.body || "";
       const match = body.match(/(?:closes|close|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+#(\d+)/i);
       const decision = p.reviewDecision || "—";
       process.stdout.write("#" + p.number + " " + decision + (match ? " issue #" + match[1] : ""));
     ')
-    echo "Pull request: ${pr_line}"
+    echo "Pull request: ${pr_line:-$none}"
   fi
 fi
 

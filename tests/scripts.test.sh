@@ -30,7 +30,7 @@ echo "${GH_TOKEN:-}" >"$FAKE_GH_TOKEN"
 case "$1 $2" in
   "label list") [[ -n "${FAKE_GH_LABELS:-}" ]] && echo "$FAKE_GH_LABELS"; exit 0 ;;
   "label create") [[ "${FAKE_GH_LABEL_DENIED:-}" == 1 ]] && exit 1; exit 0 ;;
-  "pr list") [[ -n "${FAKE_GH_PR_URL:-}" ]] && echo "$FAKE_GH_PR_URL"; exit 0 ;;
+  "pr list") [[ "${FAKE_GH_PR_FAIL:-}" == 1 ]] && exit 1; [[ -n "${FAKE_GH_PR_URL:-}" ]] && echo "$FAKE_GH_PR_URL"; exit 0 ;;
   "pr view") echo '{"number":9,"reviewDecision":"CHANGES_REQUESTED","body":"Closes #1"}'; exit 0 ;;
   "issue create") echo "https://github.com/owner/repo/issues/7"; exit 0 ;;
   "issue view") echo '{"body":"hola"}'; exit 0 ;;
@@ -242,6 +242,84 @@ cp "${skills}/check-status/scripts/"*.sh "${work}/solo/check-status/scripts/"
 status=$("${work}/solo/check-status/scripts/check-status.sh")
 check "check-status sin la skill configure-models sigue y lo dice" grep -q "^Modelos: no se pudo comprobar" <<<"$status"
 check "check-status sin la skill configure-models llega al final" grep -q "^Sin seguimiento:" <<<"$status"
+
+# Modo unipersonal: un clon aparte, para no mover la rama del repositorio de las demás pruebas.
+git clone -q "${work}/origin.git" "${work}/solo-repo" 2>/dev/null
+cd "${work}/solo-repo"
+git config user.email test@example.com
+git config user.name Test
+echo "GITHUB_TOKEN=token-del-env" >.env
+check_status="${skills}/check-status/scripts/check-status.sh"
+config=.delivery-workflow.yml
+mode_line() { "$check_status" | grep "^Modo:"; }
+check "check-status sin fichero de modo dice equipo" test "$(mode_line)" = "Modo: equipo"
+printf 'modo: equipo\n' >"$config"
+check "check-status lee modo: equipo" test "$(mode_line)" = "Modo: equipo"
+printf '# Trabajo solo.\r\n\r\nmodo: "unipersonal"  # una persona\r\n' >"$config"
+check "check-status admite comillas, comentarios y retorno de carro" test "$(mode_line)" = "Modo: unipersonal"
+printf "modo: 'unipersonal'" >"$config"
+check "check-status admite comillas simples sin salto final" test "$(mode_line)" = "Modo: unipersonal"
+for invalid in 'modo: solo\n' '' 'mode: unipersonal\n' 'modo:unipersonal\n' 'modo: unipersonal\nmodo: equipo\n' 'modo: unipersonal\notra: x\n' 'modo: "unipersonal\n' '  modo: unipersonal\n'; do
+  printf "$invalid" >"$config"
+  check "check-status rechaza «${invalid}»" bash -c "[[ \$('$check_status' | grep '^Modo:') == 'Modo: no válido.'* ]]"
+done
+rm "$config" && mkdir "$config"
+check "check-status rechaza una carpeta como fichero de modo" bash -c "[[ \$('$check_status' | grep '^Modo:') == 'Modo: no válido.'* ]]"
+rmdir "$config"
+printf 'modo: unipersonal\n' >"$config"
+own='[{"number":12,"reviewDecision":"","body":"Closes #5","isCrossRepository":false}]'
+other='[{"number":13,"reviewDecision":"","body":"Closes #6","isCrossRepository":true}]'
+: >"$FAKE_GH_LOG"
+status=$(FAKE_GH_PR_URL=$own "$check_status")
+check "check-status unipersonal dice la rama por defecto" grep -qx "Rama por defecto: main" <<<"$status"
+check "check-status unipersonal nombra la pull request de staging y su issue" grep -qx "Pull request: #12 — issue #5" <<<"$status"
+check "check-status unipersonal la busca de staging a la rama por defecto" grep -q -- "pr list --head staging --base main --state open" "$FAKE_GH_LOG"
+status=$(FAKE_GH_PR_URL='[]' "$check_status")
+check "check-status unipersonal dice que no hay ninguna" grep -qx "Pull request: ninguna abierta de staging a main" <<<"$status"
+status=$(FAKE_GH_PR_URL=$other "$check_status")
+check "check-status no cuenta la rama staging de un fork" grep -qx "Pull request: ninguna abierta de staging a main" <<<"$status"
+status=$(FAKE_GH_PR_FAIL=1 "$check_status")
+check "check-status unipersonal dice que no pudo consultar" grep -q "^Pull request: no se pudo consultar" <<<"$status"
+check "check-status unipersonal llega al final aunque falle la consulta" grep -q "^Sin seguimiento:" <<<"$status"
+status=$(GIT_WORKFLOW_BASE=main "$check_status")
+check "check-status unipersonal rechaza otra rama base" grep -q "^Modo: unipersonal. La rama base es main" <<<"$status"
+git remote set-head origin staging
+check "check-status unipersonal rechaza staging como rama por defecto" bash -c "'$check_status' | grep -q '^Modo: unipersonal. La rama por defecto es staging'"
+git remote set-head origin main
+git update-ref -d refs/remotes/origin/staging
+check "check-status unipersonal avisa si falta staging" bash -c "'$check_status' | grep -q '^Modo: unipersonal. Falta la rama staging'"
+git fetch -q origin
+
+# pull-changes --unipersonal: adelanta staging y cambia a ella.
+pull="${skills}/pull-changes/scripts/pull-changes.sh"
+git switch -q -c staging origin/staging 2>/dev/null || git switch -q staging
+git commit -q --allow-empty -m "chore: advance staging"
+git push -q origin staging
+git reset -q --hard HEAD~1
+git switch -q main
+check "pull-changes rechaza un argumento desconocido" bash -c "! '$pull' --otro 2>/dev/null"
+check "pull-changes --unipersonal rechaza otra rama base" bash -c "! GIT_WORKFLOW_BASE=main '$pull' --unipersonal 2>/dev/null"
+check "pull-changes --unipersonal funciona" "$pull" --unipersonal
+check "pull-changes --unipersonal deja la rama en staging" test "$(git rev-parse --abbrev-ref HEAD)" = staging
+check "pull-changes --unipersonal adelanta staging" test "$(git rev-parse HEAD)" = "$(git rev-parse origin/staging)"
+
+# manage-empty-commit --unipersonal: solo en staging.
+empty="${skills}/manage-empty-commit/scripts/manage-empty-commit.sh"
+check "manage-empty-commit --unipersonal hace el commit en staging" "$empty" 8 --unipersonal
+check "el commit de staging es chore: open #8" test "$(git log -1 --format=%s)" = "chore: open #8"
+check "manage-empty-commit sin la opción sigue rechazando staging" bash -c "! '$empty' 8 2>/dev/null"
+git switch -q main
+check "manage-empty-commit --unipersonal se niega en main" bash -c "! '$empty' 8 --unipersonal 2>/dev/null"
+git switch -q -c 8-feat-otra
+check "manage-empty-commit --unipersonal se niega en otra rama" bash -c "! '$empty' 8 --unipersonal 2>/dev/null"
+check "manage-empty-commit rechaza una opción desconocida" bash -c "! '$empty' 8 --otra 2>/dev/null"
+
+# manage-pr-base --sin-draft: de staging a la rama por defecto, lista.
+: >"$FAKE_GH_LOG"
+check "manage-pr-base --sin-draft abre la PR" "${skills}/manage-pr-base/scripts/manage-pr-base.sh" staging "Add notes" "${work}/body.md" feat main --sin-draft
+check "la PR va de staging a main, sin draft, asignada y con etiqueta" grep -q -- "pr create --base main --head staging --title Add notes --body-file ${work}/body.md --assignee @me --label feat" "$FAKE_GH_LOG"
+check "la PR sin draft no lleva --draft" bash -c "! grep -q -- '--draft' '$FAKE_GH_LOG'"
+cd "${work}/repo"
 rm -rf .cursor
 
 # Las skills lanzan sus scripts con bash o node: así una regla de permisos vale para todos.

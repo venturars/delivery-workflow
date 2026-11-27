@@ -39,8 +39,11 @@ detect_base() {
   return 1
 }
 
-if [[ $# -ne 1 ]]; then
-  echo "Uso: manage-empty-commit.sh NUMERO" >&2
+solo=no
+if [[ $# -eq 2 && "$2" == --unipersonal ]]; then
+  solo=yes
+elif [[ $# -ne 1 ]]; then
+  echo "Uso: manage-empty-commit.sh NUMERO [--unipersonal]" >&2
   exit 1
 fi
 
@@ -52,13 +55,20 @@ if [[ ! "$number" =~ ^[0-9]+$ ]]; then
 fi
 
 current=$(git rev-parse --abbrev-ref HEAD)
-base=$(detect_base 2>/dev/null) || base=""
-for protected in "$base" staging main master; do
-  if [[ -n "$protected" && "$current" == "$protected" ]]; then
-    echo "El commit vacío no se hace en ${current}." >&2
+if [[ "$solo" == yes ]]; then
+  if [[ "$current" != staging ]]; then
+    echo "En modo unipersonal el commit vacío se hace en staging, no en ${current}." >&2
     exit 1
   fi
-done
+else
+  base=$(detect_base 2>/dev/null) || base=""
+  for protected in "$base" staging main master; do
+    if [[ -n "$protected" && "$current" == "$protected" ]]; then
+      echo "El commit vacío no se hace en ${current}." >&2
+      exit 1
+    fi
+  done
+fi
 
 tmp_index=$(mktemp)
 cleanup() { rm -f "$tmp_index"; }

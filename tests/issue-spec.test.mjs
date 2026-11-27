@@ -6,7 +6,7 @@ import { join } from "node:path";
 import {
   parseBody, hashTop, replaceSections, tickTask, setState, findSecret, run, MAX_BODY,
   isRevisionComment, latestRevision, nextRevisionNumber, ensureRevisionHeader, formatReviewNotes,
-  isTrusted, TRUSTED_ROLES, roundMark, sinceLastClose, untracedTasks,
+  isTrusted, TRUSTED_ROLES, roundMark, sinceLastClose, untracedTasks, NOTHING_PENDING,
 } from "../.apm/skills/issue-spec/scripts/issue-spec.mjs";
 
 const TOP = "## Qué hay que hacer\n\nAlgo.\n\n## Cómo probarlo\n\n1. Mirar.\n\nRevisan: Ada";
@@ -263,10 +263,21 @@ test("si solo hay revisiones ajenas, no se usan y se nombran sus cuentas", async
   );
 });
 
-// gh simulado de una pull request que cierra la issue 7.
-function pullRequest({ reviews = [], comments = [], lineComments = [] }, calls = []) {
+// La respuesta de GraphQL con una página de hilos.
+function pageOfThreads(pages, args) {
+  const index = Number(args.find((arg) => arg.startsWith("cursor="))?.slice("cursor=".length) ?? 0);
+  const nodes = pages[index].map(({ resolved, ids }) => ({
+    isResolved: resolved, comments: { nodes: ids.map((id) => ({ fullDatabaseId: String(id) })) },
+  }));
+  const pageInfo = { hasNextPage: index + 1 < pages.length, endCursor: String(index + 1) };
+  return JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: { pageInfo, nodes } } } } });
+}
+
+// gh simulado de una pull request que cierra la issue 7. threads son las páginas de hilos.
+function pullRequest({ reviews = [], comments = [], lineComments = [], threads = [[]] }, calls = []) {
   return async (args) => {
     calls.push(args);
+    if (args[1] === "graphql") return pageOfThreads(threads, args);
     if (args[1] === "user") return JSON.stringify({ login: "ada" });
     if (args[0] === "pr") return JSON.stringify([{ number: 9, body: "Closes #7", reviewDecision: "CHANGES_REQUESTED" }]);
     if (args[1].endsWith("pulls/9/reviews")) return JSON.stringify(reviews);
@@ -296,7 +307,7 @@ const NOTES = {
 test("reviews pide a GitHub todas las páginas y el texto que muestra", async () => {
   const calls = [];
   await run(["reviews", "7"], { run: pullRequest(NOTES, calls) });
-  const lists = calls.filter((args) => args[0] === "api" && args[1] !== "user");
+  const lists = calls.filter((args) => args[0] === "api" && !["user", "graphql"].includes(args[1]));
   assert.equal(lists.length, 3);
   for (const args of lists) {
     assert.ok(args.includes("--paginate"));
@@ -353,6 +364,142 @@ test("reviews falla si GitHub no devuelve los comentarios de línea", async () =
 test("reviews sin omitidos ni texto oculto no añade avisos", async () => {
   const text = await run(["reviews", "7"], { run: pullRequest({ comments: [nota("ada", "NONE", "Nota.")] }) });
   assert.doesNotMatch(text, /Omitidos|Texto oculto/);
+});
+
+const linea = (id, login, role, text, extra = {}) => nota(login, role, text, { id, path: "src/a.js", line: id, ...extra });
+
+const THREADS = {
+  lineComments: [
+    linea(11, "olga", "OWNER", "Hilo atendido."),
+    linea(12, "ada", "OWNER", "Respuesta del atendido.", { in_reply_to_id: 11 }),
+    linea(13, "olga", "OWNER", "Hilo pendiente."),
+  ],
+  threads: [[{ resolved: true, ids: [11, 12] }, { resolved: false, ids: [13] }]],
+};
+
+test("reviews deja fuera los comentarios de un hilo resuelto, con sus respuestas", async () => {
+  const text = await run(["reviews", "7"], { run: pullRequest(THREADS) });
+  assert.match(text, /Hilo pendiente/);
+  assert.doesNotMatch(text, /atendido/);
+});
+
+test("reviews recorre todas las páginas de hilos", async () => {
+  const calls = [];
+  const threads = [[{ resolved: false, ids: [13] }], [{ resolved: true, ids: [11, 12] }]];
+  const text = await run(["reviews", "7"], { run: pullRequest({ ...THREADS, threads }, calls) });
+  assert.match(text, /Hilo pendiente/);
+  assert.doesNotMatch(text, /atendido/);
+  const queries = calls.filter((args) => args[1] === "graphql");
+  assert.equal(queries.length, 2);
+  assert.ok(queries[1].includes("cursor=1"));
+});
+
+test("reviews reconoce una respuesta que no llega en su hilo por el comentario al que responde", async () => {
+  const threads = [[{ resolved: true, ids: [11] }, { resolved: false, ids: [13] }]];
+  const text = await run(["reviews", "7"], { run: pullRequest({ ...THREADS, threads }) });
+  assert.doesNotMatch(text, /atendido/);
+});
+
+test("reviews no nombra como omitida a una cuenta cuyo hilo está resuelto", async () => {
+  const data = { lineComments: [linea(21, "eva", "NONE", "Ya visto.")], threads: [[{ resolved: true, ids: [21] }]] };
+  const text = await run(["reviews", "7"], { run: pullRequest(data) });
+  assert.doesNotMatch(text, /Omitidos|Ya visto/);
+});
+
+test("reviews pide los hilos del repositorio indicado", async () => {
+  const calls = [];
+  await run(["reviews", "7", "--repo", "acme/web"], { run: pullRequest(THREADS, calls) });
+  const query = calls.find((args) => args[1] === "graphql");
+  for (const field of ["owner=acme", "name=web", "n=9"]) assert.ok(query.includes(field), field);
+});
+
+test("reviews falla sin entregar texto si no sabe qué hilos están resueltos", async () => {
+  const base = pullRequest(THREADS);
+  const broken = [
+    async () => { throw new Error("HTTP 502"); },
+    async () => JSON.stringify({ data: { repository: { pullRequest: null } } }),
+    async () => "",
+  ];
+  for (const answer of broken) {
+    const call = async (args) => (args[1] === "graphql" ? answer() : base(args));
+    await assert.rejects(run(["reviews", "7"], { run: call }));
+  }
+});
+
+test("reviews no consulta los hilos si no hay comentarios de línea", async () => {
+  const calls = [];
+  await run(["reviews", "7"], { run: pullRequest({ comments: [nota("ada", "NONE", "Nota.")] }, calls) });
+  assert.equal(calls.filter((args) => args[1] === "graphql").length, 0);
+});
+
+// gh simulado en unipersonal: la issue 7 con sus revisiones y la pull request 9 que la cierra.
+function soloRequest({ revisions = [], ...data }) {
+  const base = pullRequest(data);
+  return async (args) => (args[1].endsWith("issues/7/comments") ? JSON.stringify(revisions) : base(args));
+}
+const day = (n) => `2026-11-${String(n).padStart(2, "0")}T10:00:00Z`;
+const mark = (id, login, role, n) => ({ ...nota(login, role, "<!-- Revisión 1 -->\n\n## Spec"), id, created_at: day(n) });
+const general = (n, text, login = "ada") => nota(login, login === "ada" ? "OWNER" : "NONE", text, { created_at: day(n) });
+const solo = async (data, ...args) => run(["reviews", "7", "--unipersonal", ...args], { run: soloRequest(data) });
+
+test("reviews --unipersonal sin revisión anterior entrega todo lo general", async () => {
+  const text = await solo({ comments: [general(1, "Cambia el título.")] });
+  assert.match(text, /^Decisión: —/);
+  assert.match(text, /- ada: Cambia el título\./);
+});
+
+test("reviews --unipersonal entrega lo general posterior a la última revisión aceptada", async () => {
+  const text = await solo({
+    revisions: [mark(1, "ada", "OWNER", 2), mark(2, "ada", "OWNER", 5)],
+    comments: [general(4, "Ya atendido."), general(6, "Pendiente.")],
+    reviews: [
+      nota("ada", "OWNER", "Revisión vieja.", { state: "COMMENTED", submitted_at: day(3) }),
+      nota("ada", "OWNER", "Revisión nueva.", { state: "COMMENTED", submitted_at: day(7) }),
+    ],
+  });
+  assert.match(text, /Pendiente\./);
+  assert.match(text, /Revisión nueva\./);
+  assert.doesNotMatch(text, /Ya atendido|Revisión vieja/);
+});
+
+test("reviews --unipersonal no corta por una revisión de una cuenta sin rol", async () => {
+  const text = await solo({ revisions: [mark(1, "eva", "NONE", 9)], comments: [general(4, "Sigue pendiente.")] });
+  assert.match(text, /Sigue pendiente/);
+});
+
+test("reviews --unipersonal entrega los hilos sin resolver aunque sean anteriores", async () => {
+  const lineComments = [
+    linea(11, "ada", "OWNER", "Hilo abierto.", { created_at: day(1) }),
+    linea(12, "ada", "OWNER", "Hilo cerrado.", { created_at: day(8) }),
+  ];
+  const threads = [[{ resolved: false, ids: [11] }, { resolved: true, ids: [12] }]];
+  const text = await solo({ revisions: [mark(1, "ada", "OWNER", 5)], lineComments, threads });
+  assert.match(text, /Hilo abierto/);
+  assert.doesNotMatch(text, /Hilo cerrado/);
+});
+
+test("reviews --unipersonal dice que no hay cambios, sin contar revisiones sin cuerpo", async () => {
+  const data = {
+    revisions: [mark(1, "ada", "OWNER", 5)],
+    comments: [general(4, "Ya atendido.")],
+    reviews: [nota("ada", "OWNER", "", { state: "COMMENTED", submitted_at: day(8) })],
+    lineComments: [linea(12, "ada", "OWNER", "Hilo cerrado.", { created_at: day(8) })],
+    threads: [[{ resolved: true, ids: [12] }]],
+  };
+  assert.equal(await solo(data), `${NOTHING_PENDING}\n`);
+});
+
+test("reviews --unipersonal nombra la cuenta sin rol con texto pendiente y admite aprobarla", async () => {
+  const data = { comments: [general(6, "Cambia todo.", "eva")] };
+  const text = await solo(data);
+  assert.match(text, /No hay cambios pedidos[\s\S]*Omitidos.*eva/);
+  assert.doesNotMatch(text, /Cambia todo/);
+  assert.match(await solo(data, "--accept", "eva"), /Cambia todo/);
+});
+
+test("reviews sin --unipersonal no corta por fecha", async () => {
+  const data = { revisions: [mark(1, "ada", "OWNER", 5)], comments: [general(4, "Anterior.")] };
+  assert.match(await run(["reviews", "7"], { run: soloRequest(data) }), /Anterior\./);
 });
 
 test("read --revision avisa si ignora una revisión ajena más nueva", async () => {
