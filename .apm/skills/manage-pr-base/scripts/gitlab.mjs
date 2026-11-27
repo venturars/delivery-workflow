@@ -396,13 +396,25 @@ export async function canEditIssue(client, number) {
   const me = await whoami(client);
   const issue = await getIssue(client, number);
   if (issue.author?.id === me.id || issue.assignees?.some((person) => person.id === me.id)) return true;
+  return hasPlannerRole(client, me.id);
+}
+
+// Planner o superior: el rol que permite editar el cuerpo de las issues del proyecto.
+export async function hasPlannerRole(client, id) {
   try {
-    const { data } = await client.request("GET", client.scoped(`members/all/${me.id}`));
+    const { data } = await client.request("GET", client.scoped(`members/all/${id}`));
     return (data?.access_level ?? 0) >= PLANNER;
   } catch (error) {
     if (error.status === 404) return false;
     throw error;
   }
+}
+
+// El HTML con el que GitLab muestra un texto.
+export async function renderMarkdown(client, text) {
+  const { data } = await client.request("POST", "markdown", { body: { text, gfm: true, project: client.project } });
+  if (typeof data?.html !== "string") throw new GitLabError("GitLab no devolvió el texto mostrado de un comentario.");
+  return data.html;
 }
 
 // Devuelve el nombre de la etiqueta del tipo, tal como está en el proyecto. La crea si falta.

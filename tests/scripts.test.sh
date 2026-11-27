@@ -290,7 +290,7 @@ check "release-version falla sin X.Y.Z" bash -c "! bash '$release' 2>/dev/null"
 check "say-it-straight existe" test -f "${skills}/say-it-straight/SKILL.md"
 check "say-it-straight declara su name" grep -q "^name: say-it-straight" "${skills}/say-it-straight/SKILL.md"
 check "say-it-straight deja los commits en inglés fuera de alcance" grep -q "commit-changes" "${skills}/say-it-straight/SKILL.md"
-for agent in concept-developer concept-tester manage-issue manage-pr; do
+for agent in concept-developer concept-tester code-tester manage-issue manage-pr; do
   check "${agent} precarga say-it-straight" grep -q -- "- say-it-straight" "${package}/.apm/agents/${agent}.agent.md"
 done
 
@@ -402,6 +402,10 @@ check "delivery-workflow pasa el primer id CL-NN libre a los dos agentes" grep -
 for agent in concept-developer concept-tester; do
   check "${agent} recibe el primer id CL-NN libre sin valor por defecto" bash -c "grep -qF 'primer id \`CL-NN\` libre' '${package}/.apm/agents/${agent}.agent.md' && grep -qF 'desde el primer id libre del encargo' '${package}/.apm/agents/${agent}.agent.md' && ! grep -qiE 'por defecto|CL-01 si|empieza en .?CL-01' '${package}/.apm/agents/${agent}.agent.md'"
 done
+check "delivery-workflow cierra el bloque sin gastar ronda" bash -c "grep -qF '**Cierre del bloque:** No gasta ronda.' '$dw'"
+check "delivery-workflow comprueba el rastro antes de dar por pasada la spec" grep -qF '`issue-spec trace N` confirma que cada task marcada tiene rastro' "$dw"
+check "delivery-workflow corrige las observaciones de redacción sin gastar ronda" grep -qF 'se corrigen una sola vez, sin gastar ronda' "$dw"
+check "la plantilla de tasks no reserva una task al linter" bash -c "! grep -qi 'ejecutar el linter' '${skills}/issue-spec/assets/tasks.md'"
 check "delivery-workflow nombra legal-advisor en herramientas" grep -qF '**Subagente `legal-advisor`:**' "$dw"
 
 # setup-discord-notifications: skill instalable y apagada por defecto.

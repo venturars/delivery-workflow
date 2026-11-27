@@ -37,6 +37,11 @@ const person = (id) => ({ id });
 const assignees = (ids) => (state.ignoreAssignees ? [] : state.singleAssignee ? ids.slice(-1) : ids).map(person);
 
 if (url.pathname === "/api/v4/user") reply(200, state.me);
+// Como GitLab al mostrar un texto: quita los comentarios HTML y escapa lo demás.
+if (url.pathname === "/api/v4/markdown" && method === "POST") {
+  const shown = body.text.replace(/<!--[\s\S]*?-->/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  reply(201, state.noHtml ? {} : { html: `<p dir="auto">${shown}</p>` });
+}
 const users = state.users ?? [];
 if (url.pathname === "/api/v4/users") reply(200, users.filter((user) => user.username.toLowerCase() === url.searchParams.get("username").toLowerCase()));
 
@@ -161,7 +166,7 @@ if (method === "GET") {
   page(url.searchParams.get("sort") === "asc" ? issue.notes : [...issue.notes].reverse());
 }
 if (method === "POST") {
-  const note = { id: issue.notes.length + 1, body: body.body, system: false };
+  const note = { id: issue.notes.length + 1, body: body.body, system: false, author: state.me };
   issue.notes.push(note);
   reply(201, note);
 }

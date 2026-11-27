@@ -1,6 +1,6 @@
 ---
 name: say-it-straight
-description: "Prosa en español para issues, spec, PRs y docs: declarativa, concreta y sin relleno defensivo. La usan manage-issue, manage-pr, concept-developer y concept-tester. Fuera de alcance: commits (commit-changes, inglés) y chat del orquestador."
+description: "Prosa en español para issues, spec, PRs y docs: declarativa, concreta y sin relleno defensivo. La usan manage-issue, manage-pr, concept-developer, code-tester y concept-tester. Fuera de alcance: commits (commit-changes, inglés) y chat del orquestador."
 ---
 
 # Skill: Say it straight
@@ -13,7 +13,7 @@ description: "Prosa en español para issues, spec, PRs y docs: declarativa, conc
 
 ## 2. Contexto y Alcance
 
-- **Cuándo actuar:** Al redactar el cuerpo de una issue, `## Spec`, `## Plan`, `## Tasks`, el cuerpo de una PR, o el `README.md` y los `docs/` que el cambio toque. Al comprobar, `concept-tester` aplica estas reglas además de la verdad frente al código.
+- **Cuándo actuar:** Al redactar el cuerpo de una issue, `## Spec`, `## Plan`, `## Tasks`, el cuerpo de una PR, o el `README.md` y los `docs/` que el cambio toque. Al comprobar, `concept-tester` aplica estas reglas además de la verdad frente al código, y sus hallazgos de redacción son observaciones.
 - **Fuera de alcance:** Títulos de issue y PR (inglés, plantillas). Mensajes de commit y desglose (`commit-changes`, inglés). Respuestas del orquestador y entrevistas. No traduzcas identificadores de código.
 
 Precedencia:

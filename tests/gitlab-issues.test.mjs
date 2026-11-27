@@ -206,10 +206,10 @@ test("sin token, issue-spec sale con 1 y no con 3", () => {
 
 test("revisiones: lee todas las páginas, ignora los comentarios de sistema y edita el último", () => {
   const notes = [
-    { id: 1, body: "<!-- Revisión 1 -->\n\nvieja", system: false },
-    { id: 2, body: "hola", system: false },
-    { id: 3, body: "<!-- Revisión 7 -->", system: true },
-    { id: 4, body: `<!-- Revisión 2 -->\n\n## Tasks\n\n- [ ] **TASK-01:** Uno`, system: false },
+    { id: 1, body: "<!-- Revisión 1 -->\n\nvieja", system: false, author: ME },
+    { id: 2, body: "hola", system: false, author: ME },
+    { id: 3, body: "<!-- Revisión 7 -->", system: true, author: ME },
+    { id: 4, body: `<!-- Revisión 2 -->\n\n## Tasks\n\n- [ ] **TASK-01:** Uno`, system: false, author: ME },
   ];
   const gl = project({ pageSize: 1, issues: { 1: issue({ notes }) } });
   const hash = gl.spec("top-hash", "1", "--revision").stdout.trim();

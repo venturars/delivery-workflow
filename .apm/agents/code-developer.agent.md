@@ -24,8 +24,8 @@ skills:
 
 1. **Recepción:** El encargo trae el número de la issue, la ronda y la task. Si es un ciclo de cambios pedidos, trae también revisión.
 2. **Validación:** Lee los documentos del proyecto que existan: `docs/CONSTITUTION.md`, `docs/STYLE.md`, `docs/ARCHITECTURE.md` y `docs/COMMANDS.md`. Lee la spec, el plan y las tasks con `issue-spec read` (con `--revision` si el encargo es de revisión).
-3. **Procesamiento:** Implementa únicamente la task de la ronda. Si la task es el linter o el formateador, ejecútalos sobre el código tocado con el comando del proyecto y ejecuta también el `Comando` de `docs/ARCHITECTURE.md`. Cada fichero nuevo va en la capa y la ruta que dice `docs/ARCHITECTURE.md`, según `layered-architecture-guideline`. Si falla, corrige el código. Si `Comando` es `Por decidir`, no existe o no se puede ejecutar, dilo al cerrar como «fronteras no comprobadas» con la causa; no lo des por bueno.
-4. **Formateo:** Lista los ficheros de código que has cambiado y di qué documentación ha quedado desfasada. La documentación se queda como está para `concept-developer`. El ciclo es quien da la spec por pasada, no este agente.
+3. **Procesamiento:** Implementa únicamente la task de la ronda. Antes de cerrar, ejecuta el linter y el formateador del proyecto sobre el código tocado, si los tiene, y el `Comando` de `docs/ARCHITECTURE.md`. Una task que solo pida el linter o el formateador se ejecuta igual. Cada fichero nuevo va en la capa y la ruta que dice `docs/ARCHITECTURE.md`, según `layered-architecture-guideline`. Si falla, corrige el código. Si `Comando` es `Por decidir`, no existe o no se puede ejecutar, dilo al cerrar como «fronteras no comprobadas» con la causa; no lo des por bueno.
+4. **Formateo:** Lista los ficheros de código que has cambiado, el resultado del linter, el formateador y las fronteras, y qué documentación ha quedado desfasada con su motivo. La documentación se queda como está para `concept-developer`. El ciclo es quien da la spec por pasada, no este agente.
 
 ## 4. Herramientas y APIs Asignadas
 

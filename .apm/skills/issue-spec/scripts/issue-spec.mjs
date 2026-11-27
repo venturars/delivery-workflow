@@ -8,8 +8,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { realpathSync } from "node:fs";
 import {
-  GitLabError, LIMITS, canEditIssue, checkForge, connect, createNote, getIssue, listNotes, listOpenMergeRequests,
-  reviewSummary, updateIssue, updateNote,
+  GitLabError, LIMITS, canEditIssue, checkForge, connect, createNote, getIssue, hasPlannerRole, listNotes,
+  listOpenMergeRequests, renderMarkdown, reviewSummary, updateIssue, updateNote, whoami,
 } from "./gitlab.mjs";
 
 const exec = promisify(execFile);
@@ -88,6 +88,108 @@ export function findSecret(text) {
   return null;
 }
 
+// Roles que GitHub asigna a las cuentas que el repositorio reconoce.
+export const TRUSTED_ROLES = ["OWNER", "MEMBER", "COLLABORATOR"];
+// GitHub devuelve además el texto tal como lo muestra, en body_text.
+const RENDERED = "Accept: application/vnd.github.full+json";
+
+export function authorOf(item) {
+  return item.author?.login ?? item.user?.login ?? "";
+}
+
+// Se acepta la cuenta del token, una cuenta con rol y una cuenta que la persona aprueba (en minúsculas).
+export function isTrusted(item, viewer, accepted = []) {
+  const login = authorOf(item).toLowerCase();
+  if (!login) return false;
+  const role = item.authorAssociation ?? item.author_association;
+  return login === viewer.toLowerCase() || TRUSTED_ROLES.includes(role) || accepted.includes(login);
+}
+
+// GitLab da la cuenta en author.username.
+function gitlabItem(note) {
+  return { ...note, author: { ...note.author, login: note.author?.username } };
+}
+
+// En GitLab el rol no llega con la nota: se pide una vez por cuenta y se traduce al que isTrusted acepta.
+async function addGitLabRoles(api, items, roles = new Map()) {
+  const result = [];
+  for (const item of items) {
+    const id = item.author?.id;
+    if (!roles.has(id)) roles.set(id, id != null && (await hasPlannerRole(api, id)));
+    result.push({ ...item, author_association: roles.get(id) ? "MEMBER" : "NONE" });
+  }
+  return result;
+}
+
+const ENTITIES = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'", nbsp: " " };
+
+function decodeEntity(entity, name) {
+  if (name[0] !== "#") return ENTITIES[name.toLowerCase()];
+  const code = /^#x/i.test(name) ? parseInt(name.slice(2), 16) : Number(name.slice(1));
+  return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+}
+
+// Un comentario, una declaración o una etiqueta con sus atributos. Va en una sola pasada para que un «<!» dentro
+// de un atributo no parta la etiqueta y deje a la vista lo que lleva.
+const MARKUP = /<!--[\s\S]*?(?:-->|$)|<[!?][^>]*>|<(\/?)([a-z][a-z0-9-]*)(?=[\s/>])(?:"[^"]*"|'[^']*'|[^'">])*>\n?/gi;
+const BLOCKS = new Set(["p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "tr", "pre", "blockquote", "summary", "details"]);
+
+// El texto que se ve en el HTML de GitLab: sin comentarios, etiquetas ni atributos.
+export function visibleText(html) {
+  return html
+    .replace(MARKUP, (match, slash, name) => {
+      const tag = name?.toLowerCase();
+      if (tag === "br" || (slash && BLOCKS.has(tag))) return "\n";
+      return tag && match.endsWith("\n") ? "\n" : "";
+    })
+    .replace(/&(#x[0-9a-f]+|#\d+|lt|gt|amp|quot|apos|nbsp);/gi, decodeEntity)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function gitlabText(api, body) {
+  return visibleText(await renderMarkdown(api, body));
+}
+
+// Cambia el cuerpo por el texto que el forge muestra. Sin ese texto no se entrega el original.
+function renderedBody(item) {
+  if (!item.body) return "";
+  if (typeof item.body_text !== "string") {
+    throw new IssueSpecError("No llegó el texto mostrado de un comentario. No se entrega ninguno.", 1);
+  }
+  return item.body_text;
+}
+
+function countHtmlComments(text) {
+  return text.split("<!--").length - 1;
+}
+
+// Deja lo que puede llegar a un agente y apunta qué cuentas se omiten y cuáles llevaban texto oculto.
+export function screenNotes({ reviews = [], comments = [], lineComments = [] }, viewer, accepted = []) {
+  const omitted = new Set();
+  const hidden = new Set();
+  const screen = (list) =>
+    list.flatMap((item) => {
+      if (!isTrusted(item, viewer, accepted)) {
+        omitted.add(authorOf(item) || "(sin autor)");
+        return [];
+      }
+      const body = renderedBody(item);
+      if (countHtmlComments(item.body ?? "") > countHtmlComments(body)) hidden.add(authorOf(item));
+      return [{ ...item, body }];
+    });
+  const notes = {
+    reviews: screen(reviews.filter(isChangeNote)),
+    comments: screen(comments.filter((comment) => !comment.isResolved)),
+    lineComments: screen(lineComments.filter((comment) => !comment.isResolved)),
+  };
+  return { notes, omitted: [...omitted], hidden: [...hidden] };
+}
+
+function isChangeNote(review) {
+  return review.state === "CHANGES_REQUESTED" || review.state === "COMMENTED";
+}
+
 export const REVISION_FIRST_LINE = /^<!-- Revisión (\d+) -->[ \t]*$/;
 
 export function isRevisionComment(body) {
@@ -120,8 +222,8 @@ export function ensureRevisionHeader(text, number) {
 export function formatReviewNotes({ reviewDecision, reviews = [], comments = [], lineComments = [] }) {
   const lines = [`Decisión: ${reviewDecision ?? "—"}`, ""];
   for (const review of reviews) {
-    if (review.state !== "CHANGES_REQUESTED" && review.state !== "COMMENTED") continue;
-    const author = review.author?.login ?? review.author ?? "revisor";
+    if (!isChangeNote(review)) continue;
+    const author = review.author?.login ?? review.user?.login ?? review.author ?? "revisor";
     lines.push(`## ${author} (${review.state})`);
     if (review.body) lines.push(review.body.trim(), "");
   }
@@ -134,6 +236,50 @@ export function formatReviewNotes({ reviewDecision, reviews = [], comments = [],
   return `${lines.join("\n").trim()}\n`;
 }
 
+export const ROUND_FIRST_LINE = /^<!-- (Ronda [1-9]|Cierre) -->[ \t]*$/;
+
+export function roundMark(body) {
+  const first = normalize(body ?? "").trim().split("\n")[0] ?? "";
+  return first.match(ROUND_FIRST_LINE)?.[1] ?? null;
+}
+
+// Los comentarios posteriores al último cierre: lo que todavía no se ha comprobado.
+export function sinceLastClose(notes) {
+  return notes.slice(notes.findLastIndex((note) => note.mark === "Cierre") + 1);
+}
+
+// Tasks marcadas que no figuran en ninguna línea «Tasks:». Las de manage-* son de la pull request, no del ciclo.
+export function untracedTasks(tasks, notes) {
+  const traced = new Set(
+    notes
+      .flatMap((text) => text.split("\n"))
+      .filter((line) => line.trim().startsWith("Tasks:"))
+      .flatMap((line) => line.match(/TASK-\d+/g) ?? []),
+  );
+  return normalize(tasks)
+    .split(/^(?=\s*- \[)/m)
+    .flatMap((block) => {
+      const id = block.match(/^\s*- \[[xX]\] \*\*(TASK-\d+):\*\*/)?.[1];
+      const fromPullRequest = /\*\*Agente:\*\*\s*`manage-/.test(block);
+      return id && !fromPullRequest && !traced.has(id) ? [id] : [];
+    });
+}
+
+function parseLogins(list = "") {
+  return list
+    .split(",")
+    .map((login) => login.trim().replace(/^@/, "").toLowerCase())
+    .filter(Boolean);
+}
+
+// Las notas aceptadas, y debajo las cuentas omitidas y las que llevaban texto oculto.
+function screenedLines(reviewDecision, { notes, omitted, hidden }) {
+  const output = [formatReviewNotes({ reviewDecision, ...notes }).trimEnd()];
+  if (omitted.length) output.push(`Omitidos (cuentas sin rol en el repositorio): ${omitted.join(", ")}`);
+  if (hidden.length) output.push(`Texto oculto quitado en comentarios de: ${hidden.join(", ")}`);
+  return output.join("\n\n");
+}
+
 function closesIssue(body, number) {
   return new RegExp(`(?:closes|close|closed|fix|fixes|fixed|resolve|resolves|resolved)\\s+#${number}\\b`, "i").test(
     body ?? "",
@@ -141,26 +287,41 @@ function closesIssue(body, number) {
 }
 
 // La revisión del merge request abierto que cierra la issue.
-async function gitlabReviewNotes(api, number) {
+async function gitlabReviewNotes(api, number, viewer, accepted) {
   const found = (await listOpenMergeRequests(api)).find((item) => closesIssue(item.description, number));
   if (!found) throw new IssueSpecError("No hay un merge request abierto que cierre esta issue.", 1);
   const review = await reviewSummary(api, found);
+  const roles = new Map();
+  // Solo se pide el texto mostrado de las cuentas aceptadas.
+  const withText = async (items, prefix = () => "") => {
+    const result = [];
+    for (const item of await addGitLabRoles(api, items, roles)) {
+      if (item.body && isTrusted(item, viewer, accepted)) {
+        item.body_text = `${prefix(item)}${await gitlabText(api, item.body)}`;
+      }
+      result.push(item);
+    }
+    return result;
+  };
   const lineComments = review.threads.flatMap((thread) => thread.notes.filter((note) => !note.system).map((note) => ({
-    user: { login: note.author.username },
+    ...gitlabItem(note),
     path: note.position?.new_path ?? note.position?.old_path,
     line: note.position?.new_line ?? note.position?.old_line,
-    body: note.body,
   })));
   const reviews = review.notes.map((note) => ({
+    ...gitlabItem(note),
     state: review.askers.includes(note.author.username) ? "CHANGES_REQUESTED" : "COMMENTED",
-    author: note.author.username,
-    // Un comentario general no se resuelve: la fecha distingue lo de esta vuelta de lo anterior.
-    body: note.created_at ? `${note.created_at.slice(0, 10)}: ${note.body}` : note.body,
   }));
-  const text = formatReviewNotes({ reviewDecision: review.decision, reviews, lineComments });
+  // Un comentario general no se resuelve: la fecha distingue lo de esta vuelta de lo anterior.
+  const dated = (note) => (note.created_at ? `${note.created_at.slice(0, 10)}: ` : "");
+  const screened = screenNotes(
+    { reviews: await withText(reviews, dated), lineComments: await withText(lineComments) },
+    viewer,
+    accepted,
+  );
   const extra = [`Piden cambios: ${review.askers.join(", ") || "nadie"}`];
   if (!review.statesAvailable) extra.push("Esta instancia no dice quién pidió cambios: la decisión sale de los hilos y las aprobaciones.");
-  return `${text}\n${extra.join("\n")}\n`;
+  return `${screenedLines(review.decision, screened)}\n\n${extra.join("\n")}\n`;
 }
 
 function checkTop(parsed, expected) {
@@ -216,13 +377,14 @@ function parseArgs(args) {
   const [command, number, ...rest] = args;
   if (!command || !/^\d+$/.test(number ?? "")) {
     throw new IssueSpecError(
-      "Uso: can-edit N | read N [--revision] [--section top|spec|plan|tasks] | top-hash N [--revision] | write N --expect-top H [--revision] [--spec F] [--plan F] [--tasks F] | tick N TASK-NN --expect-top H [--revision] | state N Borrador|Implementada|Fallida --expect-top H [--revision] | comment N F | reviews N | revision N F",
+      "Uso: can-edit N | read N [--revision] [--section top|spec|plan|tasks] | top-hash N [--revision] | write N --expect-top H [--revision] [--spec F] [--plan F] [--tasks F] | tick N TASK-NN --expect-top H [--revision] | state N Borrador|Implementada|Fallida --expect-top H [--revision] | comment N F | rounds N [--revision] [--since-close] [--accept LOGINS] | trace N [--revision] [--accept LOGINS] | reviews N [--accept LOGINS] | revision N F",
       1,
     );
   }
   const options = { positional: [] };
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === "--revision") options.revision = true;
+    else if (rest[i] === "--since-close") options.sinceClose = true;
     else if (rest[i].startsWith("--")) options[rest[i].slice(2)] = rest[++i];
     else options.positional.push(rest[i]);
   }
@@ -263,7 +425,10 @@ export async function run(args, options = {}) {
   }
 }
 
-async function execute(args, { run: injected, gitlab, today = () => new Date().toISOString().slice(0, 10) }) {
+async function execute(
+  args,
+  { run: injected, gitlab, today = () => new Date().toISOString().slice(0, 10), warn = console.error },
+) {
   const { command, number, options } = parseArgs(args);
   const api = gitlab ?? (injected ? null : await gitlabClient(options.repo));
   const call = injected ?? gh();
@@ -289,7 +454,7 @@ async function execute(args, { run: injected, gitlab, today = () => new Date().t
     });
   };
   const listComments = async () => {
-    if (api) return listNotes(api, number);
+    if (api) return (await listNotes(api, number)).map(gitlabItem);
     const raw = await call(["api", `${apiRepo}/issues/${number}/comments`, "--paginate"]);
     const parsed = JSON.parse(raw || "[]");
     return Array.isArray(parsed) ? parsed : [parsed];
@@ -298,10 +463,54 @@ async function execute(args, { run: injected, gitlab, today = () => new Date().t
     if (api) return createNote(api, number, text);
     return withTemporary(text, (path) => call(["issue", "comment", number, ...repo, "--body-file", path]));
   };
+  // La cuenta del token: GITLAB_TOKEN en GitLab y, en GitHub, el GITHUB_TOKEN con el que gh.sh lanza gh.
+  const viewerLogin = async () => {
+    if (api) return (await whoami(api)).username;
+    const { login } = JSON.parse((await call(["api", "user"])) || "{}");
+    if (!login) throw new IssueSpecError("No se pudo saber de qué cuenta es el token.", 1);
+    return login;
+  };
+  // GitHub da el rol con cada comentario. En GitLab se pide aparte.
+  const withRoles = async (items) => (api ? addGitLabRoles(api, items) : items);
   const source = async () => {
     if (!options.revision) return { id: null, body: await readIssueBody() };
-    const latest = latestRevision(await listComments());
+    const viewer = await viewerLogin();
+    const revisions = await withRoles((await listComments()).filter((comment) => isRevisionComment(comment.body ?? "")));
+    const trusted = revisions.filter((comment) => isTrusted(comment, viewer));
+    if (revisions.length && !trusted.length) {
+      const logins = [...new Set(revisions.map(authorOf))].join(", ");
+      throw new IssueSpecError(`Solo hay comentarios de revisión de cuentas sin rol en el repositorio: ${logins}. No se usan.`, 1);
+    }
+    const latest = latestRevision(trusted);
+    const newest = revisions.at(-1);
+    if (newest !== latest) {
+      warn(`Aviso: se ignora un comentario de revisión más nuevo, de una cuenta sin rol en el repositorio: ${authorOf(newest)}.`);
+    }
     return { id: latest.id, body: latest.body ?? "" };
+  };
+  const listRendered = async (path) => {
+    const parsed = JSON.parse((await call(["api", `${apiRepo}/${path}`, "--paginate", "-H", RENDERED])) || "[]");
+    return Array.isArray(parsed) ? parsed : [parsed];
+  };
+  // Comentarios de ronda y de cierre de las cuentas aceptadas. En una revisión, los posteriores a su comentario.
+  const roundNotes = async (revisionId) => {
+    const viewer = await viewerLogin();
+    const accepted = parseLogins(options.accept);
+    const all = api ? await listComments() : await listRendered(`issues/${number}/comments`);
+    const start = revisionId == null ? 0 : all.findIndex((comment) => comment.id === revisionId) + 1;
+    const marked = await withRoles(all.slice(start).filter((comment) => roundMark(comment.body)));
+    const trusted = marked.filter((comment) => isTrusted(comment, viewer, accepted));
+    const skipped = [...new Set(marked.filter((comment) => !trusted.includes(comment)).map(authorOf))];
+    if (skipped.length) {
+      warn(`Aviso: se ignoran comentarios de ronda de cuentas sin rol en el repositorio: ${skipped.join(", ")}.`);
+    }
+    const notes = [];
+    for (const comment of trusted) {
+      // GitHub ya trae el texto mostrado. GitLab lo da aparte.
+      const shown = api ? { ...comment, body_text: await gitlabText(api, comment.body) } : comment;
+      notes.push({ mark: roundMark(comment.body), text: renderedBody(shown) });
+    }
+    return notes;
   };
   const persist = async (body, id) => {
     if (id == null) return writeIssueBody(body);
@@ -361,36 +570,46 @@ async function execute(args, { run: injected, gitlab, today = () => new Date().t
     if (isRevisionComment(text)) {
       throw new IssueSpecError("El comentario de ronda no puede ser un comentario de revisión. Usa revision.", 1);
     }
+    if (/^<!--\s*(ronda|cierre)/i.test(normalize(text).trim()) && !roundMark(text)) {
+      throw new IssueSpecError("La primera línea tiene que ser solo <!-- Ronda N -->, de 1 a 9, o <!-- Cierre -->. No se publica.", 1);
+    }
     await postComment(text);
     return `Issue #${number}: comentario publicado.`;
   }
+  if (command === "rounds") {
+    const all = await roundNotes(options.revision ? (await source()).id : null);
+    const notes = options.sinceClose ? sinceLastClose(all) : all;
+    if (!notes.length) return "No hay comentarios de ronda.";
+    return notes.map((note) => `=== ${note.mark} ===\n${note.text.trim()}`).join("\n\n");
+  }
+  if (command === "trace") {
+    const { id, body } = await source();
+    const tasks = parseBody(body).sections.tasks;
+    if (tasks === undefined) throw new IssueSpecError("La issue no tiene sección Tasks.", 1);
+    const missing = untracedTasks(tasks, (await roundNotes(id)).map((note) => note.text));
+    if (missing.length) {
+      throw new IssueSpecError(`Tasks marcadas sin rastro en los comentarios de ronda: ${missing.join(", ")}.`, 7);
+    }
+    return `Issue #${number}: todas las tasks marcadas tienen rastro.`;
+  }
   if (command === "reviews") {
-    if (api) return gitlabReviewNotes(api, number);
+    const accepted = parseLogins(options.accept);
+    if (api) return gitlabReviewNotes(api, number, await viewerLogin(), accepted);
     const prs = JSON.parse(await call(["pr", "list", ...repo, "--state", "open", "--json", "number,body,url,reviewDecision"])) || [];
     const pr = (Array.isArray(prs) ? prs : []).find((item) => closesIssue(item.body, number));
     if (!pr) throw new IssueSpecError("No hay una pull request abierta que cierre esta issue.", 1);
-    const detail = JSON.parse(
-      await call(["pr", "view", String(pr.number), ...repo, "--json", "reviews,comments,reviewDecision,url"]),
-    );
-    let lineComments = [];
-    try {
-      const raw = await call(["api", `${apiRepo}/pulls/${pr.number}/comments`]);
-      const parsed = JSON.parse(raw || "[]");
-      lineComments = Array.isArray(parsed) ? parsed : [];
-    } catch {
-      lineComments = [];
-    }
-    return formatReviewNotes({
-      reviewDecision: detail.reviewDecision ?? pr.reviewDecision,
-      reviews: detail.reviews ?? [],
-      comments: detail.comments ?? [],
-      lineComments,
-    });
+    const reviews = await listRendered(`pulls/${pr.number}/reviews`);
+    const comments = await listRendered(`issues/${pr.number}/comments`);
+    const lineComments = await listRendered(`pulls/${pr.number}/comments`);
+    const screened = screenNotes({ reviews, comments, lineComments }, await viewerLogin(), accepted);
+    return `${screenedLines(pr.reviewDecision, screened)}\n`;
   }
   if (command === "revision") {
     const file = options.positional[0];
     if (!file) throw new IssueSpecError("Indica el fichero del comentario.", 1);
-    const n = nextRevisionNumber(await listComments());
+    const viewer = await viewerLogin();
+    const revisions = await withRoles((await listComments()).filter((comment) => isRevisionComment(comment.body ?? "")));
+    const n = nextRevisionNumber(revisions.filter((comment) => isTrusted(comment, viewer)));
     const text = ensureRevisionHeader(await readFile(file, "utf8"), n);
     checkWritable(text, limits.comment);
     await postComment(text);

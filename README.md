@@ -7,11 +7,11 @@ Paquete [APM](https://github.com/microsoft/apm) para agentes de IA. Lleva una ta
 1. **Piensa la tarea contigo** con preguntas, cada una con su respuesta recomendada.
 2. **La deja escrita en el forge:** issue con etiqueta, rama, commit `chore: open #N` y pull request en draft.
 3. **Escribe la spec, el plan y las tasks** en la propia issue.
-4. **La implementa en hasta nueve rondas** de código, tests y revisión de la documentación. Cada ronda deja un comentario en la issue.
+4. **La implementa en hasta nueve rondas** de código y tests, y comprueba la documentación al cerrar el bloque. Cada ronda y cada cierre dejan un comentario en la issue.
 5. **La cierra** con el commit final, el push y la petición de revisión.
 6. **Si la revisión pide cambios**, escribe spec, plan y tasks en un comentario de la misma issue y repite el ciclo.
 
-Se para cuando falta un dato necesario para la spec o para identificar a los revisores, si aparece un secreto o si falla la novena ronda.
+Se para cuando falta un dato necesario para la spec o para identificar a los revisores, si aparece un secreto o si falla la novena ronda o su cierre.
 
 ## Requisitos
 

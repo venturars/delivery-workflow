@@ -26,8 +26,11 @@ Momento en que la pull request abierta tiene `CHANGES_REQUESTED`. En GitLab bast
 **Revisión** (comentario):
 El comentario de la issue que empieza por `<!-- Revisión N -->` y lleva las plantillas de spec, plan y tasks de lo que pidió la persona revisora.
 
+**Cuenta aceptada**:
+La cuenta cuyo texto `issue-spec` entrega a los agentes desde la revisión. Cuáles son lo dice la skill [`issue-spec`](.apm/skills/issue-spec/SKILL.md).
+
 **Otra pasada**:
-Momento en que la persona confirma que el ciclo vuelve a empezar después de que la novena ronda falle.
+Momento en que la persona confirma que el ciclo vuelve a empezar después de que falle la novena ronda o su cierre.
 
 **Solo git**:
 La forma de dejar la tarea escrita que para con la pull request en draft enlazada, sin ciclo, para trabajar a mano.
@@ -78,19 +81,25 @@ _Evitar_: consulta jurídica, dictamen
 ## Ciclo
 
 **Ciclo**:
-La sucesión de rondas que convierte la spec en código comprobado. Lo abre `concept-developer` y termina cuando una ronda pasa o la novena falla.
+La sucesión de rondas y cierres que convierte la spec en código comprobado. Lo abre `concept-developer` y termina cuando un cierre pasa sin tasks pendientes o falla la novena ronda o su cierre.
 _Evitar_: bucle, pipeline
 
 **Ronda**:
-Una vuelta del ciclo: una task de código, sus tests y la comprobación de la documentación. Hay nueve como máximo.
+Una vuelta del ciclo: una task de código y sus tests. Hay nueve como máximo.
 _Evitar_: iteración, intento
 
 **Pasada**:
 Un ciclo completo de hasta nueve rondas. Una pasada nueva solo empieza con la confirmación de la persona.
 _Evitar_: ejecución, run
 
+**Bloque**:
+Las tasks de código de la issue, que se comprueban juntas contra la documentación.
+
+**Cierre del bloque**:
+Lo que sigue a la última task de código: `concept-developer` actualiza la documentación pendiente y `concept-tester` comprueba el bloque. Las observaciones de redacción se corrigen y se vuelven a comprobar una vez. No gasta ronda.
+
 **Veredicto**:
-Lo que concluye un tester en una ronda: pasa o falla, con las comprobaciones que fallaron.
+Lo que concluye un tester: pasa o falla, con las comprobaciones que fallaron. `concept-tester` puede concluir que pasa con observaciones de redacción.
 _Evitar_: resultado
 
 ## Piezas

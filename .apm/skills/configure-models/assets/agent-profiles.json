@@ -20,7 +20,7 @@
     },
     "concept-tester": {
       "tier": "standard",
-      "why": "Compara la documentación con el código en cada ronda: un modelo débil da falsos aprobados."
+      "why": "Compara la documentación con el código al cerrar cada bloque: un modelo débil da falsos aprobados."
     },
     "legal-advisor": {
       "tier": "heavy",

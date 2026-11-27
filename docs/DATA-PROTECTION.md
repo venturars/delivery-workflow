@@ -8,8 +8,8 @@ Para activarla, copia la plantilla `assets/datos-personales.md` de la skill a tu
 
 Con la sección:
 
-- Si la tarea toca datos personales, la spec recoge como requisitos los ítems que aplican, con su artículo. Si el código o la documentación no los cumplen, la ronda falla como con cualquier otro requisito. `code-tester` y `code-developer` no precargan la guía: siguen la spec.
-- Lo que `concept-tester` encuentra fuera de la spec va como nota al comentario de la ronda y no cambia el veredicto.
+- Si la tarea toca datos personales, la spec recoge como requisitos los ítems que aplican, con su artículo. Si el código o la documentación no los cumplen, la comprobación falla como con cualquier otro requisito. `code-tester` y `code-developer` no precargan la guía: siguen la spec.
+- Lo que `concept-tester` encuentra fuera de la spec va como nota al comentario de cierre y no cambia el veredicto.
 - Sin hallazgos, el reporte dice «Sin hallazgos frente al checklist vX.Y.Z (AAAA-MM-DD).».
 - Una duda que el checklist no resuelve va a `legal-advisor` como consulta legal ([LEGAL-CONSULTATIONS.md](LEGAL-CONSULTATIONS.md)).
 

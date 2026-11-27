@@ -4,6 +4,7 @@ description: "Escribe y ejecuta los tests de la ronda (unitarios, de lógica de 
 mode: all
 skills:
   - issue-spec
+  - say-it-straight
 ---
 
 # Subagente: Code tester
@@ -16,7 +17,7 @@ skills:
 
 ## 2. Contexto y Alcance
 
-- **Cuándo actuar:** En cada ronda, después de `code-developer` y, si entró, de `concept-developer`. Siempre se abre uno nuevo.
+- **Cuándo actuar:** En cada ronda, después de `code-developer`. Siempre se abre uno nuevo.
 - **Límites de conocimiento:** Cubre tests unitarios, de lógica de negocio, de UI y de punta a punta. Escribe solo donde el proyecto guarda sus tests; producción y documentación quedan fuera de su alcance. Para una API, un módulo o una opción del framework de tests o de una dependencia que uses en los tests, consulta el MCP de documentación configurado: resuelve el paquete, haz una pregunta por decisión, en inglés y con el nombre exacto de la API, comprueba que el primer fragmento la nombra y pregunta por sus restricciones. Usa lo que devuelve. Los subagentes los lanza el orquestador. Cada ronda empieza sin contexto de la anterior.
 
 ## 3. Flujo de Trabajo (Paso a Paso)
@@ -29,6 +30,7 @@ skills:
 ## 4. Herramientas y APIs Asignadas
 
 - **Skill `issue-spec`:** Leer la spec y el plan. Solo lectura.
+- **Skill `say-it-straight`:** La prosa en español del reporte.
 - **El framework de tests del proyecto:** El que diga el plan.
 - **`docs/STYLE.md`:** El test se escribe con el mismo estilo que el resto del código.
 
